@@ -208,18 +208,25 @@ namespace Model {
 		}
 	}
 
-	let deck = {
-		illum: [
-			'1|Bavarian Illuminati|10|10|9|May make one privileged attack each turn at a cost of 5MB',
-			'2|Bermuda Triangle|8|8|9|You may reorganize your groups freely at the end of your turn',
-			'3|Discordian Society|7|7|9|You have a +4 on any attempt to control Weird groups. Your power structure is immune to attacks or special abilities from Government or Straight groups.',
-			'4|Gnomes of Zurich|7|7|12|May move money freely at end of turn',
-			'5|Network|8|8|9|You start your turn by drawing two cards in stead of one',
-			'6|Servants of Cthulhu|9|9|9|You have a +4 on any attempt to destroy, even with Disasters and Assassinations. Draw a card whenever you destroy a group.',
-			'7|Society of Assassins|7|7|9|',
-		],
-		cards: [],
-	};
+	export class Deck {
+		static roots: Card[];
+		static plots: Card[];
+		static library = {
+			roots: [
+				'1|Bavarian Illuminati|10|10|9|May make one privileged attack each turn at a cost of 5MB',
+				'2|Bermuda Triangle|8|8|9|You may reorganize your groups freely at the end of your turn',
+				'3|Discordian Society|7|7|9|You have a +4 on any attempt to control Weird groups. Your power structure is immune to attacks or special abilities from Government or Straight groups.',
+				'4|Gnomes of Zurich|7|7|12|May move money freely at end of turn',
+				'5|Network|8|8|9|You start your turn by drawing two cards in stead of one',
+				'6|Servants of Cthulhu|9|9|9|You have a +4 on any attempt to destroy, even with Disasters and Assassinations. Draw a card whenever you destroy a group.',
+			],
+			plots: [],
+		};
+
+		static init () {
+			for (let root of Deck.library.roots) {}
+		}
+	}
 }
 
 namespace View {

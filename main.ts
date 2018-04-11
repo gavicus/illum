@@ -1,5 +1,9 @@
 
 namespace Util {
+	export function randomInt(min, max){
+		return Math.floor(Math.random() * (max - min + 1)) + min;
+	}
+
 	export class Point {
 		x: number;
 		y: number;
@@ -91,10 +95,9 @@ namespace Util {
 
 namespace Model {
 	export class Model {
-		static shownCards: Card[] = [];
-
 		static getHoveredCard(mouse: Util.Point): Card {
-			for (let card of this.shownCards) {
+			for (let card of Deck.tableCards) {
+				// TODO: include "open" cards
 				if(card.shape.rect.contains(mouse)) { return card; }
 			}
 			return null;
@@ -102,13 +105,12 @@ namespace Model {
 		static newCard(faction: Faction, name: string, links: number){
 			let card = new Card(name, links);
 			card.faction = faction;
-			this.shownCards.push(card);
 			return card;
 		}
 		static getLinkTargets(movingCard: Card): LinkTarget[] {
 			let faction = movingCard.faction;
 			let targets = [];
-			for (let card of this.shownCards) {
+			for (let card of Deck.tableCards) {
 				if (card.faction !== faction) { continue; }
 				if (card === movingCard){ continue; }
 				if (card.isDescendantOf(movingCard)) { continue; }
@@ -128,15 +130,19 @@ namespace Model {
 	export class Faction {
 		root: Card;
 		constructor(){
-			this.root = Model.newCard(this, 'root', 4);
-			let child = Model.newCard(this, 'child', 3);
-			this.root.addCard(child, 2);
-			let grand = Model.newCard(this, 'grand1', 1);
-			child.addCard(grand,2);
-			let grand2 = Model.newCard(this, 'grand2', 2);
-			child.addCard(grand2,3);
+			this.root = Deck.drawRoot();
+			// this.root = Model.newCard(this, 'root', 4);
+			// let child = Model.newCard(this, 'child', 3);
+			// this.root.addCard(child, 2);
+			// let grand = Model.newCard(this, 'grand1', 1);
+			// child.addCard(grand,2);
+			// let grand2 = Model.newCard(this, 'grand2', 2);
+			// child.addCard(grand2,3);
 		}
 	}
+
+	export enum CardLocation {deck,hand,open,table,discard};
+	export enum CardType {root,group,special};
 
 	export class Card {
 		name: string;
@@ -145,7 +151,15 @@ namespace Model {
 		parent: Card;
 		links: any[];
 		shape: any;
-		constructor(name: string, links: number) {
+		attack: number;
+		aid: number;
+		defense: number;
+		income: number;
+		description: string;
+		objective: string;
+		cardLocation: CardLocation;
+		cardType: CardType;
+		constructor(name: string, links: number=4) {
 			this.name = name;
 			this.linkCount = links;
 			this.parent = null;
@@ -206,25 +220,144 @@ namespace Model {
 			}
 			return false;
 		}
+
+		static init(text: string): Card {
+			let fields = text.split("|");
+			let [type,name,description,atk,def,links,income,alignments,objective] = text.split("|");
+			let card = new Card(name, parseInt(links));
+			card.description = description;
+			card.cardLocation = CardLocation.deck;
+			if (type !== 'special') {
+				// card.attack = parseInt(atk);
+				let [attack,aid] = atk.split("/");
+				card.attack = parseInt(attack);
+				card.aid = aid ? parseInt(aid) : 0;
+				card.defense = parseInt(def);
+				card.income = parseInt(income);
+			}
+			if (type === 'root'){
+				card.objective = objective;
+				card.cardType = CardType.root;
+			}
+			else if (type === 'group'){
+				// card.alignments = alignments;
+				card.cardType = CardType.group;
+			}
+			else {
+				card.cardType = CardType.special;
+			}
+			return card;
+		}
+		
+		// static initPlot(text: string): Card {
+		// 	let [type,name,pow,res,links,alignments,income,description] = text.split("|");
+		// 	let card = new Card(name,parseInt(links));
+		// 	card.description = description;
+		// 	card.cardLocation = CardLocation.deck;
+		// 	if (type === 'group') {
+		// 		card.attack = parseInt(pow);
+		// 		card.defense = parseInt(res);
+		// 		card.income = parseInt(income);
+		// 		card.cardType = CardType.group;
+		// 	}
+		// 	else {
+		// 		card.cardType = CardType.special;
+		// 	}
+		// 	return card;
+		// }
+
+		// static initRoot(text: string): Card {
+		// 	let [name,atk,def,income,description,objective] = text.split("|");
+		// 	let card = new Card(name,4);
+		// 	card.description = description;
+		// 	card.cardLocation = CardLocation.deck;
+		// 	card.attack = parseInt(atk);
+		// 	card.defense = parseInt(def);
+		// 	card.income = parseInt(income);
+		// 	card.cardType = CardType.root;
+		// 	return card;
+		// }
+
 	}
 
 	export class Deck {
-		static roots: Card[];
-		static plots: Card[];
-		static library = {
-			roots: [
-				'1|Bavarian Illuminati|10|10|9|May make one privileged attack each turn at a cost of 5MB',
-				'2|Bermuda Triangle|8|8|9|You may reorganize your groups freely at the end of your turn',
-				'3|Discordian Society|7|7|9|You have a +4 on any attempt to control Weird groups. Your power structure is immune to attacks or special abilities from Government or Straight groups.',
-				'4|Gnomes of Zurich|7|7|12|May move money freely at end of turn',
-				'5|Network|8|8|9|You start your turn by drawing two cards in stead of one',
-				'6|Servants of Cthulhu|9|9|9|You have a +4 on any attempt to destroy, even with Disasters and Assassinations. Draw a card whenever you destroy a group.',
-			],
-			plots: [],
-		};
+		static cards: Card[] = [];
+		static library = [
+				// type|name|description|atk|def|links|income|alignments|objective
+				'root|Bavarian Illuminati|May make one privileged attack each turn at a cost of 5MB|10|10|4|9||tbd',
+				'root|Bermuda Triangle|You may reorganize your groups freely at the end of your turn|8|8|4|9||tbd',
+				'root|Discordian Society|You have a +4 on any attempt to control Weird groups. Your power structure is immune to attacks or special abilities from Government or Straight groups.|7|7|4|9||tbd',
+				'root|Gnomes of Zurich|May move money freely at end of turn|7|7|4|12||tbd',
+				'root|Network|You start your turn by drawing two cards in stead of one|8|8|4|9||tbd',
+				'root|Servants of Cthulhu|You have a +4 on any attempt to destroy, even with Disasters and Assassinations. Draw a card whenever you destroy a group.|9|9|4|9||tbd',
+				// type|name|description|atk|def|links|income|alignments
+				'group|Conspiracy Theorists|tbd|0|6|0|0|Weird',
+				'group|Texas|tbd|6|6|1|0|Violent,Conservative,Government',
+				'group|Brazil|tbd|3|3|1|0|Government',
+				'group|Templars|tbd|3|6|1|0|Conservative',
+				'group|Saturday Morning Cartoons|tbd|1/1|4|1|0|Violent',
+				'group|Prince Charles|tbd|2|5|1|0|Conservative',
+				'group|Junk Mail|tbd|1/1|3|0|0|Corporate,Criminal',
+				'group|Big Media|tbd|4/4|6|1|0|Straight,Liberal',
+				'group|Flat Earthers|tbd|1|2|0|0|Weird,Conservative',
+				'group|Israel|tbd|3\3|8|0|0|Violent,Government',
+				'group|California|tbd|5|4|2|0|Weird,Liberal,Government',
+				//
+		];
 
 		static init () {
-			for (let root of Deck.library.roots) {}
+			// for (let root of Deck.library.roots) {
+			// 	Deck.roots.push(Card.initRoot(root));
+			// }
+			// for(let plot of Deck.library.plots) {
+			// 	Deck.plots.push(Card.initPlot(plot));
+			// }
+			for (let text of Deck.library) {
+				Deck.cards.push(Card.init(text));
+			}
+		}
+
+		static drawCard (collection,filter): Card {
+			let available = collection.filter((card) => {
+				if (card.cardLocation !== CardLocation.deck) { return false; }
+				return filter(card);
+			});
+			let draw = available[Util.randomInt(0,available.length-1)];
+			draw.cardLocation = CardLocation.table;
+			return draw;
+		}
+
+		static drawRoot (): Card {
+
+			// let available = Deck.roots.filter((card) => { return card.cardLocation === CardLocation.deck; });
+			// let draw = available[Util.randomInt(0,available.length-1)];
+			// draw.cardLocation = CardLocation.table;
+			// return draw;
+
+			return Deck.drawCard(Deck.cards, (card) => {return card.cardType === CardType.root;});
+		}
+
+		static drawPlot () {
+			return Deck.drawCard(Deck.cards, (card) => {return card.cardType !== CardType.root;;});
+		}
+
+		static drawGroup () {
+			return Deck.drawCard(Deck.cards, (card) => {return card.CardType === CardType.group;})
+			// let available = Deck.plots.filter((card) => {
+			// 	if (card.cardType !== CardType.group) { return false; }
+			// 	return card.cardLocation === CardLocation.deck;
+			// });
+			// let draw = available[Util.randomInt(0,available.length-1)];
+			// draw.cardLocation = CardLocation.table;
+			// return draw;
+		}
+
+		static get tableCards () {
+			return Deck.cards.filter((card) => {return card.cardLocation === CardLocation.table;});
+		}
+
+		static get uncontrolledCards () {
+			return Deck.cards.filter((card) => { return card.cardLocation === CardLocation.open; });
 		}
 	}
 }
@@ -329,6 +462,11 @@ namespace View {
 		hovered (mouse: Util.Point): boolean {
 			return this.rect.contains(mouse);
 		}
+		moveTo (point: Util.Point) {
+			let dims = this.rect.lowerRight.minus(this.rect.upperLeft);
+			this.rect.upperLeft.copy(point);
+			this.rect.lowerRight.copy(point.plus(dims));
+		}
 	}
 
 	export class View {
@@ -378,11 +516,15 @@ namespace View {
 		}
 		draw(factions: Model.Faction[], hoveredCard: Model.Card){
 			this.clear();
+			// structures
 			for (let faction of factions) {
-				// pre-orient each root card and make it immobile
 				CardShape.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
 				this.drawCard(faction.root);
 			}
+			// uncontrolled
+			//
+			// hand
+			// hovered
 			if(hoveredCard){
 				CardShape.drawBorder(hoveredCard);
 				View.context.strokeStyle = View.colors.card.hoveredBorder;
@@ -398,23 +540,31 @@ namespace View {
 			View.context.stroke();
 		}
 		drawDetail(card: Model.Card, mouse: Util.Point = null){
-
-			console.log('View.drawDetail', card, mouse);
-
+			// TODO: make root immobile -- hide 'move' button on detail screen
+			
 			this.clear();
 			let gutter = 20;
 			let lineHeight = 16;
 			let textSize = 10;
 			let cursor = new Util.Point(gutter, gutter);
-			
+			// name
 			let bodyText = textSize + "px sans-serif";
 			let boldText = "bold " + textSize + "px sans-serif";
 			View.context.font = boldText;
 			View.context.fillStyle = View.colors.card.text;
 			View.context.textAlign = 'left';
 			View.context.textBaseline = 'alphabetic';
-
 			View.context.fillText(card.name, cursor.x, cursor.y);
+			// numbers
+			cursor.movey(lineHeight);
+			View.context.font = bodyText;
+			View.context.fillText(card.attack+'/'+card.defense, cursor.x, cursor.y);
+			cursor.movey(lineHeight);
+			View.context.fillText('income: '+card.income, cursor.x, cursor.y);
+			// description
+			cursor.movey(lineHeight);
+			View.context.fillText(card.description, cursor.x, cursor.y);
+			// children
 			cursor.movey(lineHeight*2);
 			View.context.fillText('children', cursor.x, cursor.y);
 			cursor.movey(lineHeight);
@@ -426,6 +576,8 @@ namespace View {
 			cursor.movey(lineHeight*2);
 			View.hoveredButton = null;
 			for (let btn of View.detailButtons) {
+				if (btn.caption === 'move' && !card.parent) { continue; } // make root immobile
+				btn.moveTo(cursor);
 				let hovered = (mouse && btn.rect.contains(mouse));
 				if (hovered) { View.hoveredButton = btn; }
 				CardShape.drawRoundRect(btn.rect, 10);
@@ -486,9 +638,6 @@ namespace View {
 			// draw the card's children
 			card.links.forEach((child, direction) => {
 				if(typeof child !== 'number'){
-					
-					// console.log(child,direction);
-
 					let childDirection = (card.shape.rotation + direction + 2) % 4;
 					CardShape.orient(child, card.shape.links[direction], childDirection);
 					this.drawCard(child);
@@ -534,6 +683,7 @@ namespace Control {
 		factionIndex = 0;
 		mouse: any;
 		constructor(){
+			Model.Deck.init();
 			this.view = new View.View();
 			this.factions = [new Model.Faction()];
 			this.view.orientRootCards(this.factions);
@@ -555,11 +705,14 @@ namespace Control {
 		}
 		onMouseDown(event: MouseEvent){
 			this.mouse.down = true;
+			this.mouse.drag = false;
 			this.mouse.last = new Util.Point(event.offsetX, event.offsetY);
 		}
 		onMouseMove(event: MouseEvent){
-			if (this.mouse.down) { this.mouse.drag = true; }
 			let mouse = new Util.Point(event.offsetX, event.offsetY);
+			if (this.mouse.down && !mouse.equals(this.mouse.last)) {
+				this.mouse.drag = true;
+			}
 			if (this.screenState === State.table){
 				if(this.mouse.drag){
 					let delta = mouse.minus(this.mouse.last);
@@ -601,7 +754,8 @@ namespace Control {
 		onMouseUp(event: MouseEvent){
 			let mouse = new Util.Point(event.offsetX, event.offsetY);
 			if(this.screenState === State.table){
-				if(this.mouse.drag){}
+				if(this.mouse.drag){
+				}
 				else if(this.hoveredCard){
 					this.screenState = State.detail;
 					this.view.drawDetail(this.hoveredCard, mouse);
@@ -611,7 +765,6 @@ namespace Control {
 				// TODO: buttons, options, etc.
 				if (View.View.hoveredButton) {
 					let caption = View.View.hoveredButton.caption;
-					console.log('clicked button',caption);
 					if (caption === 'move') {
 						this.beginChooseLink();
 					}

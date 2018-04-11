@@ -1,5 +1,9 @@
 var Util;
 (function (Util) {
+    function randomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+    Util.randomInt = randomInt;
     var Point = /** @class */ (function () {
         function Point(px, py) {
             if (px === void 0) { px = 0; }
@@ -113,8 +117,9 @@ var Model;
         function Model() {
         }
         Model.getHoveredCard = function (mouse) {
-            for (var _i = 0, _a = this.shownCards; _i < _a.length; _i++) {
+            for (var _i = 0, _a = Deck.tableCards; _i < _a.length; _i++) {
                 var card = _a[_i];
+                // TODO: include "open" cards
                 if (card.shape.rect.contains(mouse)) {
                     return card;
                 }
@@ -124,13 +129,12 @@ var Model;
         Model.newCard = function (faction, name, links) {
             var card = new Card(name, links);
             card.faction = faction;
-            this.shownCards.push(card);
             return card;
         };
         Model.getLinkTargets = function (movingCard) {
             var faction = movingCard.faction;
             var targets = [];
-            for (var _i = 0, _a = this.shownCards; _i < _a.length; _i++) {
+            for (var _i = 0, _a = Deck.tableCards; _i < _a.length; _i++) {
                 var card = _a[_i];
                 if (card.faction !== faction) {
                     continue;
@@ -150,7 +154,6 @@ var Model;
             }
             return targets;
         };
-        Model.shownCards = [];
         return Model;
     }());
     Model_1.Model = Model;
@@ -165,19 +168,37 @@ var Model;
     Model_1.LinkTarget = LinkTarget;
     var Faction = /** @class */ (function () {
         function Faction() {
-            this.root = Model.newCard(this, 'root', 4);
-            var child = Model.newCard(this, 'child', 3);
-            this.root.addCard(child, 2);
-            var grand = Model.newCard(this, 'grand1', 1);
-            child.addCard(grand, 2);
-            var grand2 = Model.newCard(this, 'grand2', 2);
-            child.addCard(grand2, 3);
+            this.root = Deck.drawRoot();
+            // this.root = Model.newCard(this, 'root', 4);
+            // let child = Model.newCard(this, 'child', 3);
+            // this.root.addCard(child, 2);
+            // let grand = Model.newCard(this, 'grand1', 1);
+            // child.addCard(grand,2);
+            // let grand2 = Model.newCard(this, 'grand2', 2);
+            // child.addCard(grand2,3);
         }
         return Faction;
     }());
     Model_1.Faction = Faction;
+    var CardLocation;
+    (function (CardLocation) {
+        CardLocation[CardLocation["deck"] = 0] = "deck";
+        CardLocation[CardLocation["hand"] = 1] = "hand";
+        CardLocation[CardLocation["open"] = 2] = "open";
+        CardLocation[CardLocation["table"] = 3] = "table";
+        CardLocation[CardLocation["discard"] = 4] = "discard";
+    })(CardLocation = Model_1.CardLocation || (Model_1.CardLocation = {}));
+    ;
+    var CardType;
+    (function (CardType) {
+        CardType[CardType["root"] = 0] = "root";
+        CardType[CardType["group"] = 1] = "group";
+        CardType[CardType["special"] = 2] = "special";
+    })(CardType = Model_1.CardType || (Model_1.CardType = {}));
+    ;
     var Card = /** @class */ (function () {
         function Card(name, links) {
+            if (links === void 0) { links = 4; }
             this.name = name;
             this.linkCount = links;
             this.parent = null;
@@ -255,20 +276,121 @@ var Model;
             }
             return false;
         };
+        Card.init = function (text) {
+            var fields = text.split("|");
+            var _a = text.split("|"), type = _a[0], name = _a[1], description = _a[2], atk = _a[3], def = _a[4], links = _a[5], income = _a[6], alignments = _a[7], objective = _a[8];
+            var card = new Card(name, parseInt(links));
+            card.description = description;
+            card.cardLocation = CardLocation.deck;
+            if (type !== 'special') {
+                // card.attack = parseInt(atk);
+                var _b = atk.split("/"), attack = _b[0], aid = _b[1];
+                card.attack = parseInt(attack);
+                card.aid = aid ? parseInt(aid) : 0;
+                card.defense = parseInt(def);
+                card.income = parseInt(income);
+            }
+            if (type === 'root') {
+                card.objective = objective;
+                card.cardType = CardType.root;
+            }
+            else if (type === 'group') {
+                // card.alignments = alignments;
+                card.cardType = CardType.group;
+            }
+            else {
+                card.cardType = CardType.special;
+            }
+            return card;
+        };
         return Card;
     }());
     Model_1.Card = Card;
-    var deck = {
-        illum: [
-            '1|Bavarian Illuminati|10|10|9|May make one privileged attack each turn at a cost of 5MB',
-            '2|Bermuda Triangle|8|8|9|You may reorganize your groups freely at the end of your turn',
-            '3|Discordian Society|7|7|9|You have a +4 on any attempt to control Weird groups. Your power structure is immune to attacks or special abilities from Government or Straight groups.',
-            '4|Gnomes of Zurich|7|7|12|May move money freely at end of turn',
-            '5|Network|8|8|9|You start your turn by drawing two cards in stead of one',
-            '6|Servants of Cthulhu|9|9|9|You have a +4 on any attempt to destroy, even with Disasters and Assassinations. Draw a card whenever you destroy a group.',
-        ],
-        cards: [],
-    };
+    var Deck = /** @class */ (function () {
+        function Deck() {
+        }
+        Deck.init = function () {
+            // for (let root of Deck.library.roots) {
+            // 	Deck.roots.push(Card.initRoot(root));
+            // }
+            // for(let plot of Deck.library.plots) {
+            // 	Deck.plots.push(Card.initPlot(plot));
+            // }
+            for (var _i = 0, _a = Deck.library; _i < _a.length; _i++) {
+                var text = _a[_i];
+                Deck.cards.push(Card.init(text));
+            }
+        };
+        Deck.drawCard = function (collection, filter) {
+            var available = collection.filter(function (card) {
+                if (card.cardLocation !== CardLocation.deck) {
+                    return false;
+                }
+                return filter(card);
+            });
+            var draw = available[Util.randomInt(0, available.length - 1)];
+            draw.cardLocation = CardLocation.table;
+            return draw;
+        };
+        Deck.drawRoot = function () {
+            // let available = Deck.roots.filter((card) => { return card.cardLocation === CardLocation.deck; });
+            // let draw = available[Util.randomInt(0,available.length-1)];
+            // draw.cardLocation = CardLocation.table;
+            // return draw;
+            return Deck.drawCard(Deck.cards, function (card) { return card.cardType === CardType.root; });
+        };
+        Deck.drawPlot = function () {
+            return Deck.drawCard(Deck.cards, function (card) { return card.cardType !== CardType.root; ; });
+        };
+        Deck.drawGroup = function () {
+            return Deck.drawCard(Deck.cards, function (card) { return card.CardType === CardType.group; });
+            // let available = Deck.plots.filter((card) => {
+            // 	if (card.cardType !== CardType.group) { return false; }
+            // 	return card.cardLocation === CardLocation.deck;
+            // });
+            // let draw = available[Util.randomInt(0,available.length-1)];
+            // draw.cardLocation = CardLocation.table;
+            // return draw;
+        };
+        Object.defineProperty(Deck, "tableCards", {
+            get: function () {
+                return Deck.cards.filter(function (card) { return card.cardLocation === CardLocation.table; });
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(Deck, "uncontrolledCards", {
+            get: function () {
+                return Deck.cards.filter(function (card) { return card.cardLocation === CardLocation.open; });
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Deck.cards = [];
+        Deck.library = [
+            // type|name|description|atk|def|links|income|alignments|objective
+            'root|Bavarian Illuminati|May make one privileged attack each turn at a cost of 5MB|10|10|4|9||tbd',
+            'root|Bermuda Triangle|You may reorganize your groups freely at the end of your turn|8|8|4|9||tbd',
+            'root|Discordian Society|You have a +4 on any attempt to control Weird groups. Your power structure is immune to attacks or special abilities from Government or Straight groups.|7|7|4|9||tbd',
+            'root|Gnomes of Zurich|May move money freely at end of turn|7|7|4|12||tbd',
+            'root|Network|You start your turn by drawing two cards in stead of one|8|8|4|9||tbd',
+            'root|Servants of Cthulhu|You have a +4 on any attempt to destroy, even with Disasters and Assassinations. Draw a card whenever you destroy a group.|9|9|4|9||tbd',
+            // type|name|description|atk|def|links|income|alignments
+            'group|Conspiracy Theorists|tbd|0|6|0|0|Weird',
+            'group|Texas|tbd|6|6|1|0|Violent,Conservative,Government',
+            'group|Brazil|tbd|3|3|1|0|Government',
+            'group|Templars|tbd|3|6|1|0|Conservative',
+            'group|Saturday Morning Cartoons|tbd|1/1|4|1|0|Violent',
+            'group|Prince Charles|tbd|2|5|1|0|Conservative',
+            'group|Junk Mail|tbd|1/1|3|0|0|Corporate,Criminal',
+            'group|Big Media|tbd|4/4|6|1|0|Straight,Liberal',
+            'group|Flat Earthers|tbd|1|2|0|0|Weird,Conservative',
+            'group|Israel|tbd|3\3|8|0|0|Violent,Government',
+            'group|California|tbd|5|4|2|0|Weird,Liberal,Government',
+        ];
+        return Deck;
+    }());
+    Model_1.Deck = Deck;
 })(Model || (Model = {}));
 var View;
 (function (View_1) {
@@ -384,6 +506,11 @@ var View;
         Button.prototype.hovered = function (mouse) {
             return this.rect.contains(mouse);
         };
+        Button.prototype.moveTo = function (point) {
+            var dims = this.rect.lowerRight.minus(this.rect.upperLeft);
+            this.rect.upperLeft.copy(point);
+            this.rect.lowerRight.copy(point.plus(dims));
+        };
         return Button;
     }());
     var View = /** @class */ (function () {
@@ -423,12 +550,16 @@ var View;
         };
         View.prototype.draw = function (factions, hoveredCard) {
             this.clear();
+            // structures
             for (var _i = 0, factions_1 = factions; _i < factions_1.length; _i++) {
                 var faction = factions_1[_i];
-                // pre-orient each root card and make it immobile
                 CardShape.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
                 this.drawCard(faction.root);
             }
+            // uncontrolled
+            //
+            // hand
+            // hovered
             if (hoveredCard) {
                 CardShape.drawBorder(hoveredCard);
                 View.context.strokeStyle = View.colors.card.hoveredBorder;
@@ -446,13 +577,14 @@ var View;
             View.context.stroke();
         };
         View.prototype.drawDetail = function (card, mouse) {
+            // TODO: make root immobile -- hide 'move' button on detail screen
             if (mouse === void 0) { mouse = null; }
-            console.log('View.drawDetail', card, mouse);
             this.clear();
             var gutter = 20;
             var lineHeight = 16;
             var textSize = 10;
             var cursor = new Util.Point(gutter, gutter);
+            // name
             var bodyText = textSize + "px sans-serif";
             var boldText = "bold " + textSize + "px sans-serif";
             View.context.font = boldText;
@@ -460,6 +592,16 @@ var View;
             View.context.textAlign = 'left';
             View.context.textBaseline = 'alphabetic';
             View.context.fillText(card.name, cursor.x, cursor.y);
+            // numbers
+            cursor.movey(lineHeight);
+            View.context.font = bodyText;
+            View.context.fillText(card.attack + '/' + card.defense, cursor.x, cursor.y);
+            cursor.movey(lineHeight);
+            View.context.fillText('income: ' + card.income, cursor.x, cursor.y);
+            // description
+            cursor.movey(lineHeight);
+            View.context.fillText(card.description, cursor.x, cursor.y);
+            // children
             cursor.movey(lineHeight * 2);
             View.context.fillText('children', cursor.x, cursor.y);
             cursor.movey(lineHeight);
@@ -471,6 +613,10 @@ var View;
             View.hoveredButton = null;
             for (var _i = 0, _a = View.detailButtons; _i < _a.length; _i++) {
                 var btn = _a[_i];
+                if (btn.caption === 'move' && !card.parent) {
+                    continue;
+                } // make root immobile
+                btn.moveTo(cursor);
                 var hovered = (mouse && btn.rect.contains(mouse));
                 if (hovered) {
                     View.hoveredButton = btn;
@@ -540,7 +686,6 @@ var View;
             // draw the card's children
             card.links.forEach(function (child, direction) {
                 if (typeof child !== 'number') {
-                    // console.log(child,direction);
                     var childDirection = (card.shape.rotation + direction + 2) % 4;
                     CardShape.orient(child, card.shape.links[direction], childDirection);
                     _this.drawCard(child);
@@ -594,6 +739,7 @@ var Control;
             this.hoveredLink = null;
             this.screenState = State.table;
             this.factionIndex = 0;
+            Model.Deck.init();
             this.view = new View.View();
             this.factions = [new Model.Faction()];
             this.view.orientRootCards(this.factions);
@@ -619,13 +765,14 @@ var Control;
         };
         Control.prototype.onMouseDown = function (event) {
             this.mouse.down = true;
+            this.mouse.drag = false;
             this.mouse.last = new Util.Point(event.offsetX, event.offsetY);
         };
         Control.prototype.onMouseMove = function (event) {
-            if (this.mouse.down) {
+            var mouse = new Util.Point(event.offsetX, event.offsetY);
+            if (this.mouse.down && !mouse.equals(this.mouse.last)) {
                 this.mouse.drag = true;
             }
-            var mouse = new Util.Point(event.offsetX, event.offsetY);
             if (this.screenState === State.table) {
                 if (this.mouse.drag) {
                     var delta = mouse.minus(this.mouse.last);
@@ -670,7 +817,8 @@ var Control;
         Control.prototype.onMouseUp = function (event) {
             var mouse = new Util.Point(event.offsetX, event.offsetY);
             if (this.screenState === State.table) {
-                if (this.mouse.drag) { }
+                if (this.mouse.drag) {
+                }
                 else if (this.hoveredCard) {
                     this.screenState = State.detail;
                     this.view.drawDetail(this.hoveredCard, mouse);
@@ -680,7 +828,6 @@ var Control;
                 // TODO: buttons, options, etc.
                 if (View.View.hoveredButton) {
                     var caption = View.View.hoveredButton.caption;
-                    console.log('clicked button', caption);
                     if (caption === 'move') {
                         this.beginChooseLink();
                     }

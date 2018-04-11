@@ -154,6 +154,12 @@ var Model;
             }
             return targets;
         };
+        Model.initFactions = function (quantity) {
+            for (var i = 0; i < quantity; ++i) {
+                Model.factions.push(new Faction());
+            }
+        };
+        Model.factions = [];
         return Model;
     }());
     Model_1.Model = Model;
@@ -515,44 +521,25 @@ var View;
     }());
     var View = /** @class */ (function () {
         function View() {
+        }
+        View.init = function () {
             View.canvas = document.getElementById('canvas');
             View.context = View.canvas.getContext('2d');
             View.focus = new Util.Point(View.canvas.width / 2, View.canvas.height / 2);
-            View.colors = {
-                button: {
-                    fill: '#efefef',
-                    border: '#ccc',
-                    text: 'gray',
-                    hoveredFill: 'gray',
-                    hoveredText: 'white',
-                },
-                card: {
-                    border: '#bbb',
-                    link: '#bbb',
-                    fill: '#f0f0f0',
-                    text: 'gray',
-                    hoveredBorder: '#f80',
-                },
-                rootCard: {
-                    fill: '#bbb',
-                    link: '#f0f0f0',
-                },
-                screen: {
-                    fill: '#f8f8f8',
-                },
-            };
             View.detailButtons = [
                 new Button('move', new Util.Point(20, 100)),
             ];
-        }
-        View.prototype.dragFocus = function (delta) {
+            this.orientRootCards(Model.Model.factions);
+            this.draw();
+        };
+        View.dragFocus = function (delta) {
             View.focus.move(delta.x, delta.y);
         };
-        View.prototype.draw = function (factions, hoveredCard) {
+        View.draw = function () {
             this.clear();
             // structures
-            for (var _i = 0, factions_1 = factions; _i < factions_1.length; _i++) {
-                var faction = factions_1[_i];
+            for (var _i = 0, _a = Model.Model.factions; _i < _a.length; _i++) {
+                var faction = _a[_i];
                 CardShape.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
                 this.drawCard(faction.root);
             }
@@ -560,14 +547,14 @@ var View;
             //
             // hand
             // hovered
-            if (hoveredCard) {
-                CardShape.drawBorder(hoveredCard);
+            if (View.hoveredCard) {
+                CardShape.drawBorder(View.hoveredCard);
                 View.context.strokeStyle = View.colors.card.hoveredBorder;
                 View.context.stroke();
             }
         };
-        View.prototype.drawLinkChoice = function (factions, hoveredCard, closest) {
-            this.draw(factions, hoveredCard);
+        View.drawLinkChoice = function (closest) {
+            View.draw();
             if (!closest) {
                 return;
             }
@@ -576,10 +563,10 @@ var View;
             View.context.strokeStyle = 'red';
             View.context.stroke();
         };
-        View.prototype.drawDetail = function (card, mouse) {
+        View.drawDetail = function (card, mouse) {
             // TODO: make root immobile -- hide 'move' button on detail screen
             if (mouse === void 0) { mouse = null; }
-            this.clear();
+            View.clear();
             var gutter = 20;
             var lineHeight = 16;
             var textSize = 10;
@@ -635,14 +622,14 @@ var View;
                 cursor.movex(btn.size.x + gutter);
             }
         };
-        View.prototype.clear = function () {
+        View.clear = function () {
             var w = View.canvas.width;
             var h = View.canvas.height;
             var c = View.context;
             c.fillStyle = View.colors.screen.fill;
             c.fillRect(0, 0, w, h);
         };
-        View.prototype.drawCard = function (card) {
+        View.drawCard = function (card) {
             var _this = this;
             // orient was called before drawCard
             CardShape.drawBorder(card);
@@ -679,7 +666,7 @@ var View;
             }
             // draw card name
             var center = card.shape.rect.center;
-            View.context.fillStyle = View.colors.text;
+            View.context.fillStyle = View.colors.card.text;
             View.context.textAlign = 'center';
             View.context.textBaseline = 'middle';
             View.context.fillText(card.name, center.x, center.y);
@@ -692,7 +679,7 @@ var View;
                 }
             });
         };
-        View.prototype.orientRootCards = function (factions) {
+        View.orientRootCards = function (factions) {
             factions.forEach(function (faction, index) {
                 faction.root.shape.rootPoint = new Util.Point(-View.cardLength / 2, -View.cardLength / 2);
                 CardShape.orient(faction.root, faction.root.shape.rootPoint, 0);
@@ -719,6 +706,30 @@ var View;
         View.widthRatio = 0.7;
         View.cardLength = 50; // changes with zoom
         View.hoveredButton = null;
+        View.hoveredCard = null;
+        View.colors = {
+            button: {
+                fill: '#efefef',
+                border: '#ccc',
+                text: 'gray',
+                hoveredFill: 'gray',
+                hoveredText: 'white',
+            },
+            card: {
+                border: '#bbb',
+                link: '#bbb',
+                fill: '#f0f0f0',
+                text: 'gray',
+                hoveredBorder: '#f80',
+            },
+            rootCard: {
+                fill: '#bbb',
+                link: '#f0f0f0',
+            },
+            screen: {
+                fill: '#f8f8f8',
+            },
+        };
         return View;
     }());
     View_1.View = View;
@@ -740,10 +751,8 @@ var Control;
             this.screenState = State.table;
             this.factionIndex = 0;
             Model.Deck.init();
-            this.view = new View.View();
-            this.factions = [new Model.Faction()];
-            this.view.orientRootCards(this.factions);
-            this.view.draw(this.factions, this.hoveredCard);
+            Model.Model.initFactions(1);
+            View.View.init();
             this.mouse = {
                 down: false,
                 drag: false,
@@ -752,7 +761,7 @@ var Control;
         }
         Object.defineProperty(Control.prototype, "activeFaction", {
             get: function () {
-                return this.factions[this.factionIndex];
+                return Model.Model.factions[this.factionIndex];
             },
             enumerable: true,
             configurable: true
@@ -760,8 +769,8 @@ var Control;
         Control.prototype.beginChooseLink = function () {
             // TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
             this.screenState = State.chooseLink;
-            this.view.draw(this.factions, this.hoveredCard);
-            this.linkTargets = Model.Model.getLinkTargets(this.hoveredCard);
+            View.View.draw();
+            this.linkTargets = Model.Model.getLinkTargets(View.View.hoveredCard);
         };
         Control.prototype.onMouseDown = function (event) {
             this.mouse.down = true;
@@ -776,14 +785,14 @@ var Control;
             if (this.screenState === State.table) {
                 if (this.mouse.drag) {
                     var delta = mouse.minus(this.mouse.last);
-                    this.view.dragFocus(delta);
-                    this.view.draw(this.factions, this.hoveredCard);
+                    View.View.dragFocus(delta);
+                    View.View.draw();
                 }
                 else {
                     var hovered = Model.Model.getHoveredCard(mouse);
-                    if (hovered !== this.hoveredCard) {
-                        this.hoveredCard = hovered;
-                        this.view.draw(this.factions, this.hoveredCard);
+                    if (hovered !== View.View.hoveredCard) {
+                        View.View.hoveredCard = hovered;
+                        View.View.draw();
                     }
                 }
             }
@@ -803,10 +812,10 @@ var Control;
                     }
                 }
                 this.hoveredLink = closest;
-                this.view.drawLinkChoice(this.factions, this.hoveredCard, closest);
+                View.View.drawLinkChoice(closest);
             }
             else if (this.screenState === State.detail) {
-                this.view.drawDetail(this.hoveredCard, mouse);
+                View.View.drawDetail(View.View.hoveredCard, mouse);
             }
             this.mouse.last = mouse;
         };
@@ -819,9 +828,9 @@ var Control;
             if (this.screenState === State.table) {
                 if (this.mouse.drag) {
                 }
-                else if (this.hoveredCard) {
+                else if (View.View.hoveredCard) {
                     this.screenState = State.detail;
-                    this.view.drawDetail(this.hoveredCard, mouse);
+                    View.View.drawDetail(View.View.hoveredCard, mouse);
                 }
             }
             else if (this.screenState === State.detail) {
@@ -834,18 +843,18 @@ var Control;
                 }
                 else {
                     this.screenState = State.table;
-                    this.view.draw(this.factions, this.hoveredCard);
+                    View.View.draw();
                 }
             }
             else if (this.screenState === State.chooseLink) {
                 // move the card !
                 // TODO: check for card overlap
                 if (this.hoveredLink) {
-                    this.hoveredCard.decouple();
-                    this.hoveredLink.card.addCard(this.hoveredCard, this.hoveredLink.linkIndex);
+                    View.View.hoveredCard.decouple();
+                    this.hoveredLink.card.addCard(View.View.hoveredCard, this.hoveredLink.linkIndex);
                 }
                 this.screenState = State.table;
-                this.view.draw(this.factions, this.hoveredCard);
+                View.View.draw();
             }
             this.mouse.down = false;
             this.mouse.drag = false;

@@ -95,6 +95,8 @@ namespace Util {
 
 namespace Model {
 	export class Model {
+		public static factions: Faction[] = [];
+
 		static getHoveredCard(mouse: Util.Point): Card {
 			for (let card of Deck.tableCards) {
 				// TODO: include "open" cards
@@ -120,6 +122,12 @@ namespace Model {
 				}
 			}
 			return targets;
+		}
+
+		static initFactions(quantity: number) {
+			for (let i = 0; i < quantity; ++i) {
+				Model.factions.push(new Faction());
+			}
 		}
 	}
 
@@ -477,47 +485,50 @@ namespace View {
 		static cardLength = 50; // changes with zoom
 		static detailButtons: Button[];
 		static hoveredButton: Button = null;
+		static hoveredCard: Model.Card = null;
 		static focus: Util.Point;
-		static colors: any;
+		static colors = {
+			button: {
+				fill: '#efefef',
+				border: '#ccc',
+				text: 'gray',
+				hoveredFill: 'gray',
+				hoveredText: 'white',
+			},
+			card: {
+				border: '#bbb',
+				link: '#bbb',
+				fill: '#f0f0f0',
+				text: 'gray',
+				hoveredBorder: '#f80',
+			},
+			rootCard: {
+				fill: '#bbb',
+				link: '#f0f0f0',
+			},
+			screen: {
+				fill: '#f8f8f8',
+			},
+		};
 
-		constructor(){
+		public static init () {
 			View.canvas = <HTMLCanvasElement>document.getElementById('canvas');
 			View.context = View.canvas.getContext('2d');
 			View.focus = new Util.Point(View.canvas.width/2, View.canvas.height/2);
-			View.colors = {
-				button: {
-					fill: '#efefef',
-					border: '#ccc',
-					text: 'gray',
-					hoveredFill: 'gray',
-					hoveredText: 'white',
-				},
-				card: {
-					border: '#bbb',
-					link: '#bbb',
-					fill: '#f0f0f0',
-					text: 'gray',
-					hoveredBorder: '#f80',
-				},
-				rootCard: {
-					fill: '#bbb',
-					link: '#f0f0f0',
-				},
-				screen: {
-					fill: '#f8f8f8',
-				},
-			};
 			View.detailButtons = [
 				new Button('move', new Util.Point(20, 100)),
 			];
+			this.orientRootCards(Model.Model.factions);
+			this.draw();
 		}
-		dragFocus(delta: Util.Point) {
+
+		public static dragFocus(delta: Util.Point) {
 			View.focus.move(delta.x, delta.y);
 		}
-		draw(factions: Model.Faction[], hoveredCard: Model.Card){
+		public static draw(){
 			this.clear();
 			// structures
-			for (let faction of factions) {
+			for (let faction of Model.Model.factions) {
 				CardShape.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
 				this.drawCard(faction.root);
 			}
@@ -525,24 +536,24 @@ namespace View {
 			//
 			// hand
 			// hovered
-			if(hoveredCard){
-				CardShape.drawBorder(hoveredCard);
+			if(View.hoveredCard){
+				CardShape.drawBorder(View.hoveredCard);
 				View.context.strokeStyle = View.colors.card.hoveredBorder;
 				View.context.stroke();
 			}
 		}
-		drawLinkChoice(factions: Model.Faction[], hoveredCard: Model.Card, closest){
-			this.draw(factions, hoveredCard);
+		public static drawLinkChoice(closest){
+			View.draw();
 			if (!closest) { return; }
 			View.beginPath();
 			View.context.arc(closest.point.x, closest.point.y, View.getArcSize(), 0, 2*Math.PI, false);
 			View.context.strokeStyle = 'red';
 			View.context.stroke();
 		}
-		drawDetail(card: Model.Card, mouse: Util.Point = null){
+		public static drawDetail(card: Model.Card, mouse: Util.Point = null){
 			// TODO: make root immobile -- hide 'move' button on detail screen
 			
-			this.clear();
+			View.clear();
 			let gutter = 20;
 			let lineHeight = 16;
 			let textSize = 10;
@@ -594,14 +605,14 @@ namespace View {
 				cursor.movex(btn.size.x+gutter);
 			}
 		}
-		clear(){
+		public static clear(){
 			let w = View.canvas.width;
 			let h = View.canvas.height;
 			let c = View.context;
 			c.fillStyle = View.colors.screen.fill;
 			c.fillRect(0,0,w,h);
 		}
-		drawCard(card: Model.Card){
+		public static drawCard(card: Model.Card){
 			// orient was called before drawCard
 			CardShape.drawBorder(card);
 			if(card.parent){
@@ -630,7 +641,7 @@ namespace View {
 
 			// draw card name
 			let center = card.shape.rect.center;
-			View.context.fillStyle = View.colors.text;
+			View.context.fillStyle = View.colors.card.text;
 			View.context.textAlign = 'center';
 			View.context.textBaseline = 'middle';
 			View.context.fillText(card.name, center.x, center.y);
@@ -644,7 +655,8 @@ namespace View {
 				}
 			});
 		}
-		orientRootCards(factions: Model.Faction[]) { // should be called only once
+		
+		public static orientRootCards(factions: Model.Faction[]) { // should be called only once
 			factions.forEach((faction, index) => {
 				faction.root.shape.rootPoint = new Util.Point(-View.cardLength/2, -View.cardLength/2);
 				CardShape.orient(faction.root, faction.root.shape.rootPoint, 0);
@@ -674,8 +686,6 @@ namespace Control {
 	enum State {table, detail, choice, chooseLink};
 
 	export class Control {
-		view: View.View;
-		factions: Model.Faction[];
 		linkTargets: Model.LinkTarget[];
 		hoveredCard: Model.Card = null;
 		hoveredLink: Model.LinkTarget = null;
@@ -684,10 +694,10 @@ namespace Control {
 		mouse: any;
 		constructor(){
 			Model.Deck.init();
-			this.view = new View.View();
-			this.factions = [new Model.Faction()];
-			this.view.orientRootCards(this.factions);
-			this.view.draw(this.factions, this.hoveredCard);
+			Model.Model.initFactions(1);
+
+			View.View.init();
+
 			this.mouse = {
 				down: false,
 				drag: false,
@@ -695,13 +705,13 @@ namespace Control {
 			};
 		}
 		get activeFaction(){
-			return this.factions[this.factionIndex];
+			return Model.Model.factions[this.factionIndex];
 		}
 		beginChooseLink(){
 			// TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
 			this.screenState = State.chooseLink;
-			this.view.draw(this.factions, this.hoveredCard);
-			this.linkTargets = Model.Model.getLinkTargets(this.hoveredCard);
+			View.View.draw();
+			this.linkTargets = Model.Model.getLinkTargets(View.View.hoveredCard);
 		}
 		onMouseDown(event: MouseEvent){
 			this.mouse.down = true;
@@ -716,14 +726,14 @@ namespace Control {
 			if (this.screenState === State.table){
 				if(this.mouse.drag){
 					let delta = mouse.minus(this.mouse.last);
-					this.view.dragFocus(delta);
-					this.view.draw(this.factions, this.hoveredCard);
+					View.View.dragFocus(delta);
+					View.View.draw();
 				}
 				else {
 					let hovered = Model.Model.getHoveredCard(mouse);
-					if(hovered !== this.hoveredCard){
-						this.hoveredCard = hovered;
-						this.view.draw(this.factions, this.hoveredCard);
+					if(hovered !== View.View.hoveredCard){
+						View.View.hoveredCard = hovered;
+						View.View.draw();
 					}
 				}
 			}
@@ -740,10 +750,10 @@ namespace Control {
 					}
 				}
 				this.hoveredLink = closest;
-				this.view.drawLinkChoice(this.factions, this.hoveredCard, closest);
+				View.View.drawLinkChoice(closest);
 			}
 			else if (this.screenState === State.detail) {
-				this.view.drawDetail(this.hoveredCard, mouse);
+				View.View.drawDetail(View.View.hoveredCard, mouse);
 			}
 			this.mouse.last = mouse;
 		}
@@ -756,9 +766,9 @@ namespace Control {
 			if(this.screenState === State.table){
 				if(this.mouse.drag){
 				}
-				else if(this.hoveredCard){
+				else if(View.View.hoveredCard){
 					this.screenState = State.detail;
-					this.view.drawDetail(this.hoveredCard, mouse);
+					View.View.drawDetail(View.View.hoveredCard, mouse);
 				}
 			}
 			else if (this.screenState === State.detail) {
@@ -771,18 +781,18 @@ namespace Control {
 				}
 				else {
 					this.screenState = State.table;
-					this.view.draw(this.factions, this.hoveredCard);
+					View.View.draw();
 				}
 			}
 			else if (this.screenState === State.chooseLink) {
 				// move the card !
 				// TODO: check for card overlap
 				if (this.hoveredLink) {
-					this.hoveredCard.decouple();
-					this.hoveredLink.card.addCard(this.hoveredCard, this.hoveredLink.linkIndex);
+					View.View.hoveredCard.decouple();
+					this.hoveredLink.card.addCard(View.View.hoveredCard, this.hoveredLink.linkIndex);
 				}
 				this.screenState = State.table;
-				this.view.draw(this.factions, this.hoveredCard);
+				View.View.draw();
 			}
 
 			this.mouse.down = false;

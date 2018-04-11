@@ -349,7 +349,7 @@ var Model;
             return Deck.drawCard(Deck.cards, function (card) { return card.cardType !== CardType.root; ; });
         };
         Deck.drawGroup = function () {
-            return Deck.drawCard(Deck.cards, function (card) { return card.CardType === CardType.group; });
+            return Deck.drawCard(Deck.cards, function (card) { return card.cardType === CardType.group; });
             // let available = Deck.plots.filter((card) => {
             // 	if (card.cardType !== CardType.group) { return false; }
             // 	return card.cardLocation === CardLocation.deck;
@@ -752,6 +752,7 @@ var Control;
             this.factionIndex = 0;
             Model.Deck.init();
             Model.Model.initFactions(1);
+            this.drawOpenCards();
             View.View.init();
             this.mouse = {
                 down: false,
@@ -771,6 +772,11 @@ var Control;
             this.screenState = State.chooseLink;
             View.View.draw();
             this.linkTargets = Model.Model.getLinkTargets(View.View.hoveredCard);
+        };
+        Control.prototype.drawOpenCards = function () {
+            for (var i = 0; i < 4; ++i) {
+                var card = Model.Deck.drawGroup().cardLocation = Model.CardLocation.open;
+            }
         };
         Control.prototype.onMouseDown = function (event) {
             this.mouse.down = true;

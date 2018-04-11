@@ -350,7 +350,7 @@ namespace Model {
 		}
 
 		static drawGroup () {
-			return Deck.drawCard(Deck.cards, (card) => {return card.CardType === CardType.group;})
+			return Deck.drawCard(Deck.cards, (card) => {return card.cardType === CardType.group;})
 			// let available = Deck.plots.filter((card) => {
 			// 	if (card.cardType !== CardType.group) { return false; }
 			// 	return card.cardLocation === CardLocation.deck;
@@ -695,6 +695,7 @@ namespace Control {
 		constructor(){
 			Model.Deck.init();
 			Model.Model.initFactions(1);
+			this.drawOpenCards();
 
 			View.View.init();
 
@@ -712,6 +713,11 @@ namespace Control {
 			this.screenState = State.chooseLink;
 			View.View.draw();
 			this.linkTargets = Model.Model.getLinkTargets(View.View.hoveredCard);
+		}
+		drawOpenCards() {
+			for (let i=0; i<4; ++i) {
+				let card = Model.Deck.drawGroup().cardLocation = Model.CardLocation.open;
+			}
 		}
 		onMouseDown(event: MouseEvent){
 			this.mouse.down = true;

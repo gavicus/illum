@@ -116,7 +116,7 @@ var Model;
     var Model = /** @class */ (function () {
         function Model() {
         }
-        Model.getHoveredCard = function (mouse) {
+        Model.getHoveredCard = function (mouse, cardSet) {
             for (var _i = 0, _a = Deck.tableCards; _i < _a.length; _i++) {
                 var card = _a[_i];
                 if (card.shape.rect.contains(mouse)) {
@@ -130,11 +130,12 @@ var Model;
             card.faction = faction;
             return card;
         };
-        Model.getLinkTargets = function (movingCard) {
+        Model.getLinkTargets = function (movingCard, cardSet) {
+            if (cardSet === void 0) { cardSet = Deck.structureCards; }
             var faction = movingCard.faction;
             var targets = [];
-            for (var _i = 0, _a = Deck.tableCards; _i < _a.length; _i++) {
-                var card = _a[_i];
+            for (var _i = 0, cardSet_1 = cardSet; _i < cardSet_1.length; _i++) {
+                var card = cardSet_1[_i];
                 if (card.faction !== faction) {
                     continue;
                 }
@@ -317,12 +318,6 @@ var Model;
         function Deck() {
         }
         Deck.init = function () {
-            // for (let root of Deck.library.roots) {
-            // 	Deck.roots.push(Card.initRoot(root));
-            // }
-            // for(let plot of Deck.library.plots) {
-            // 	Deck.plots.push(Card.initPlot(plot));
-            // }
             for (var _i = 0, _a = Deck.library; _i < _a.length; _i++) {
                 var text = _a[_i];
                 Deck.cards.push(Card.init(text));
@@ -340,24 +335,13 @@ var Model;
             return draw;
         };
         Deck.drawRoot = function () {
-            // let available = Deck.roots.filter((card) => { return card.cardLocation === CardLocation.deck; });
-            // let draw = available[Util.randomInt(0,available.length-1)];
-            // draw.cardLocation = CardLocation.table;
-            // return draw;
             return Deck.drawCard(Deck.cards, function (card) { return card.cardType === CardType.root; });
         };
         Deck.drawPlot = function () {
-            return Deck.drawCard(Deck.cards, function (card) { return card.cardType !== CardType.root; ; });
+            return Deck.drawCard(Deck.cards, function (card) { return card.cardType !== CardType.root; });
         };
         Deck.drawGroup = function () {
             return Deck.drawCard(Deck.cards, function (card) { return card.cardType === CardType.group; });
-            // let available = Deck.plots.filter((card) => {
-            // 	if (card.cardType !== CardType.group) { return false; }
-            // 	return card.cardLocation === CardLocation.deck;
-            // });
-            // let draw = available[Util.randomInt(0,available.length-1)];
-            // draw.cardLocation = CardLocation.table;
-            // return draw;
         };
         Object.defineProperty(Deck, "structureCards", {
             get: function () {
@@ -369,7 +353,8 @@ var Model;
         Object.defineProperty(Deck, "tableCards", {
             get: function () {
                 return Deck.cards.filter(function (card) {
-                    return card.cardLocation === CardLocation.open || card.cardLocation === CardLocation.structure;
+                    return card.cardLocation === CardLocation.open
+                        || card.cardLocation === CardLocation.structure;
                 });
             },
             enumerable: true,
@@ -473,7 +458,7 @@ var View;
             card.shape.rotation = direction;
             var cardWidth = View.cardLength * View.widthRatio;
             var x, y, w, h;
-            if (direction === 0) { // right
+            if (direction === 0) {
                 w = View.cardLength;
                 h = cardWidth;
                 x = stem.x;
@@ -482,7 +467,7 @@ var View;
                 card.shape.links[2].movex(w);
                 card.shape.links[3].move(w / 2, h / 2);
             }
-            else if (direction === 1) { // down
+            else if (direction === 1) {
                 w = cardWidth;
                 h = View.cardLength;
                 x = stem.x - w / 2;
@@ -491,7 +476,7 @@ var View;
                 card.shape.links[2].movey(h);
                 card.shape.links[3].move(-w / 2, h / 2);
             }
-            else if (direction === 2) { // left
+            else if (direction === 2) {
                 w = View.cardLength;
                 h = cardWidth;
                 x = stem.x - w;
@@ -500,7 +485,7 @@ var View;
                 card.shape.links[2].movex(-w);
                 card.shape.links[3].move(-w / 2, -h / 2);
             }
-            else if (direction === 3) { // up
+            else if (direction === 3) {
                 w = cardWidth;
                 h = View.cardLength;
                 x = stem.x - w / 2;
@@ -541,9 +526,11 @@ var View;
             View.focus = new Util.Point(View.canvas.width / 2, View.canvas.height / 2);
             View.detailButtons = [
                 new Button('move', new Util.Point(20, 100)),
+                new Button('control', new Util.Point(100, 100)),
             ];
             this.orientRootCards(Model.Model.factions);
             this.draw();
+            console.log('cursor', View.canvas.style.cursor);
         };
         View.dragFocus = function (delta) {
             View.focus.move(delta.x, delta.y);
@@ -598,7 +585,11 @@ var View;
             View.context.fillStyle = View.colors.card.text;
             View.context.textAlign = 'left';
             View.context.textBaseline = 'alphabetic';
-            View.context.fillText(card.name, cursor.x, cursor.y);
+            var cardName = card.name;
+            if (card.cardType === Model.CardType.root) {
+                cardName = 'The ' + card.name;
+            }
+            View.context.fillText(cardName, cursor.x, cursor.y);
             // numbers
             cursor.movey(lineHeight);
             View.context.font = bodyText;
@@ -627,6 +618,11 @@ var View;
                     if (card.cardLocation === Model.CardLocation.open) {
                         continue;
                     } // make uncontrolled cards immobile
+                }
+                else if (btn.caption === 'control') {
+                    if (card.cardLocation !== Model.CardLocation.structure) {
+                        continue;
+                    }
                 }
                 btn.moveTo(cursor);
                 var hovered = (mouse && btn.rect.contains(mouse));
@@ -681,7 +677,7 @@ var View;
                 var apex = card.shape.links[index].clone();
                 var center_1 = card.shape.rect.center;
                 CardShape.drawLink(apex, center_1, inward);
-                if (card.parent) {
+                if (card.cardType === Model.CardType.group) {
                     View.context.fillStyle = View.colors.card.link;
                 }
                 else {
@@ -691,10 +687,15 @@ var View;
             }
             // draw card name
             var center = card.shape.rect.center;
-            View.context.fillStyle = View.colors.card.text;
+            if (card.cardType === Model.CardType.group) {
+                View.context.fillStyle = View.colors.card.text;
+            }
+            else {
+                View.context.fillStyle = View.colors.rootCard.text;
+            }
             View.context.textAlign = 'center';
             View.context.textBaseline = 'middle';
-            View.context.fillText(card.name, center.x, center.y);
+            View.context.fillText(card.name.substring(0, View.cardLength / 8), center.x, center.y);
             // draw the card's children
             card.links.forEach(function (child, direction) {
                 if (typeof child !== 'number') {
@@ -742,14 +743,15 @@ var View;
             },
             card: {
                 border: '#bbb',
-                link: '#bbb',
+                link: '#444',
                 fill: '#f0f0f0',
                 text: 'gray',
                 hoveredBorder: '#f80',
             },
             rootCard: {
-                fill: '#bbb',
-                link: '#f0f0f0',
+                fill: '#888',
+                link: '#fff',
+                text: 'white',
             },
             screen: {
                 fill: '#f8f8f8',
@@ -775,6 +777,9 @@ var Control;
             this.hoveredLink = null;
             this.screenState = State.table;
             this.factionIndex = 0;
+            this.command = null;
+            this.attacker = null;
+            this.defender = null;
             Model.Deck.init();
             Model.Model.initFactions(1);
             this.drawOpenCards();
@@ -792,11 +797,17 @@ var Control;
             enumerable: true,
             configurable: true
         });
-        Control.prototype.beginChooseLink = function () {
+        Control.prototype.beginChooseLink = function (cardSet) {
+            if (cardSet === void 0) { cardSet = Model.Deck.structureCards; }
             // TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
             this.screenState = State.chooseLink;
             View.View.draw();
-            this.linkTargets = Model.Model.getLinkTargets(View.View.hoveredCard);
+            this.linkTargets = Model.Model.getLinkTargets(View.View.hoveredCard, cardSet);
+        };
+        Control.prototype.beginChooseTarget = function () {
+            this.screenState = State.table;
+            View.View.canvas.style.cursor = 'crosshair';
+            View.View.draw();
         };
         Control.prototype.drawOpenCards = function () {
             for (var i = 0; i < 4; ++i) {
@@ -820,7 +831,7 @@ var Control;
                     View.View.draw();
                 }
                 else {
-                    var hovered = Model.Model.getHoveredCard(mouse);
+                    var hovered = Model.Model.getHoveredCard(mouse, Model.Deck.tableCards);
                     if (hovered !== View.View.hoveredCard) {
                         View.View.hoveredCard = hovered;
                         View.View.draw();
@@ -860,8 +871,20 @@ var Control;
                 if (this.mouse.drag) {
                 }
                 else if (View.View.hoveredCard) {
-                    this.screenState = State.detail;
-                    View.View.drawDetail(View.View.hoveredCard, mouse);
+                    if (this.command == 'control') {
+                        View.View.canvas.style.cursor = '';
+                        this.defender = View.View.hoveredCard;
+                        // TODO: handle control attempt
+                        View.View.hoveredCard.cardLocation = Model.CardLocation.structure;
+                        // TODO: new card should only link to controlling card
+                        // place the newly controlled card
+                        this.beginChooseLink([this.attacker]);
+                        this.command = null;
+                    }
+                    else {
+                        this.screenState = State.detail;
+                        View.View.drawDetail(View.View.hoveredCard, mouse);
+                    }
                 }
             }
             else if (this.screenState === State.detail) {
@@ -870,6 +893,11 @@ var Control;
                     var caption = View.View.hoveredButton.caption;
                     if (caption === 'move') {
                         this.beginChooseLink();
+                    }
+                    else if (caption === 'control') {
+                        this.attacker = View.View.hoveredCard;
+                        this.command = caption;
+                        this.beginChooseTarget();
                     }
                 }
                 else {
@@ -885,6 +913,7 @@ var Control;
                     this.hoveredLink.card.addCard(View.View.hoveredCard, this.hoveredLink.linkIndex);
                 }
                 this.screenState = State.table;
+                View.View.canvas.style.cursor = 'arrow';
                 View.View.draw();
             }
             this.mouse.down = false;
@@ -894,8 +923,9 @@ var Control;
     }());
     Control_1.Control = Control;
 })(Control || (Control = {}));
+var control;
 window.addEventListener('load', function () {
-    var control = new Control.Control();
+    control = new Control.Control();
     window.addEventListener('mousemove', function (event) {
         control.onMouseMove(event);
     });

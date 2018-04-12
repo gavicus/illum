@@ -119,7 +119,6 @@ var Model;
         Model.getHoveredCard = function (mouse) {
             for (var _i = 0, _a = Deck.tableCards; _i < _a.length; _i++) {
                 var card = _a[_i];
-                // TODO: include "open" cards
                 if (card.shape.rect.contains(mouse)) {
                     return card;
                 }
@@ -191,7 +190,7 @@ var Model;
         CardLocation[CardLocation["deck"] = 0] = "deck";
         CardLocation[CardLocation["hand"] = 1] = "hand";
         CardLocation[CardLocation["open"] = 2] = "open";
-        CardLocation[CardLocation["table"] = 3] = "table";
+        CardLocation[CardLocation["structure"] = 3] = "structure";
         CardLocation[CardLocation["discard"] = 4] = "discard";
     })(CardLocation = Model_1.CardLocation || (Model_1.CardLocation = {}));
     ;
@@ -255,6 +254,9 @@ var Model;
             return true;
         };
         Card.prototype.decouple = function () {
+            if (!this.parent) {
+                return;
+            }
             for (var dir in Object.keys(this.parent.links)) {
                 if (typeof this.parent.links[dir] !== 'number' && this.parent.links[dir] === this) {
                     this.parent.links[dir] = 1;
@@ -289,7 +291,6 @@ var Model;
             card.description = description;
             card.cardLocation = CardLocation.deck;
             if (type !== 'special') {
-                // card.attack = parseInt(atk);
                 var _b = atk.split("/"), attack = _b[0], aid = _b[1];
                 card.attack = parseInt(attack);
                 card.aid = aid ? parseInt(aid) : 0;
@@ -335,7 +336,7 @@ var Model;
                 return filter(card);
             });
             var draw = available[Util.randomInt(0, available.length - 1)];
-            draw.cardLocation = CardLocation.table;
+            draw.cardLocation = CardLocation.structure;
             return draw;
         };
         Deck.drawRoot = function () {
@@ -358,14 +359,23 @@ var Model;
             // draw.cardLocation = CardLocation.table;
             // return draw;
         };
-        Object.defineProperty(Deck, "tableCards", {
+        Object.defineProperty(Deck, "structureCards", {
             get: function () {
-                return Deck.cards.filter(function (card) { return card.cardLocation === CardLocation.table; });
+                return Deck.cards.filter(function (card) { return card.cardLocation === CardLocation.structure; });
             },
             enumerable: true,
             configurable: true
         });
-        Object.defineProperty(Deck, "uncontrolledCards", {
+        Object.defineProperty(Deck, "tableCards", {
+            get: function () {
+                return Deck.cards.filter(function (card) {
+                    return card.cardLocation === CardLocation.open || card.cardLocation === CardLocation.structure;
+                });
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(Deck, "openCards", {
             get: function () {
                 return Deck.cards.filter(function (card) { return card.cardLocation === CardLocation.open; });
             },
@@ -376,23 +386,26 @@ var Model;
         Deck.library = [
             // type|name|description|atk|def|links|income|alignments|objective
             'root|Bavarian Illuminati|May make one privileged attack each turn at a cost of 5MB|10|10|4|9||tbd',
-            'root|Bermuda Triangle|You may reorganize your groups freely at the end of your turn|8|8|4|9||tbd',
-            'root|Discordian Society|You have a +4 on any attempt to control Weird groups. Your power structure is immune to attacks or special abilities from Government or Straight groups.|7|7|4|9||tbd',
+            'root|Bermuda Triangle|May reorganize your groups freely at end of turn|8|8|4|9||tbd',
+            'root|Discordian Society|+4 on any attempt to control Weird groups. Immune to attacks from Government or Straight groups.|8|8|4|8||tbd',
             'root|Gnomes of Zurich|May move money freely at end of turn|7|7|4|12||tbd',
-            'root|Network|You start your turn by drawing two cards in stead of one|8|8|4|9||tbd',
-            'root|Servants of Cthulhu|You have a +4 on any attempt to destroy, even with Disasters and Assassinations. Draw a card whenever you destroy a group.|9|9|4|9||tbd',
+            'root|Network|Turns over two cards at beginning of turn|7|7|4|9||tbd',
+            'root|Servants of Cthulhu|+2 on any attempt to destroy any group.|9|9|4|7||tbd',
+            'root|Society of Assassins|+4 on any attempt to neutralize any group.|8|8|4|8||tbd',
+            'root|UFOs|Illuminati group may participate in two attacks per turn.|6|6|4|8||tbd',
             // type|name|description|atk|def|links|income|alignments
-            'group|Conspiracy Theorists|tbd|0|6|0|0|Weird',
-            'group|Texas|tbd|6|6|1|0|Violent,Conservative,Government',
-            'group|Brazil|tbd|3|3|1|0|Government',
-            'group|Templars|tbd|3|6|1|0|Conservative',
-            'group|Saturday Morning Cartoons|tbd|1/1|4|1|0|Violent',
-            'group|Prince Charles|tbd|2|5|1|0|Conservative',
-            'group|Junk Mail|tbd|1/1|3|0|0|Corporate,Criminal',
-            'group|Big Media|tbd|4/4|6|1|0|Straight,Liberal',
-            'group|Flat Earthers|tbd|1|2|0|0|Weird,Conservative',
-            'group|Israel|tbd|3\3|8|0|0|Violent,Government',
-            'group|California|tbd|5|4|2|0|Weird,Liberal,Government',
+            'group|Big Media||4/3|6|3|3|Straight,Liberal',
+            'group|C.I.A.||6/4|5|3|0|Government,Violent',
+            'group|California||5|4|2|5|Weird,Liberal,Government',
+            'group|Democrats||5|4|2|3|Liberal',
+            'group|F.B.I.||4/2|6|2|0|Government,Straight',
+            'group|Hollywood||2|0|2|5|Liberal',
+            'group|I.R.S.|Owning player may tax each opponent 2MB on his own income phase. Tax may come from any group. If a player has no money, he owes no tax.|5/3|5|2|*|Criminal,Government',
+            'group|KGB||2/2|6|1|0|Communist,Violent',
+            'group|Mafia||7|7|3|6|Criminal,Violent',
+            'group|New York||7|8|3|3|Violent,Criminal,Government',
+            'group|Republicans||4|4|3|4|Conservative',
+            'group|Texas||6|6|2|4|Violent,Conservative,Government',
         ];
         return Deck;
     }());
@@ -460,7 +473,7 @@ var View;
             card.shape.rotation = direction;
             var cardWidth = View.cardLength * View.widthRatio;
             var x, y, w, h;
-            if (direction === 0) {
+            if (direction === 0) { // right
                 w = View.cardLength;
                 h = cardWidth;
                 x = stem.x;
@@ -469,7 +482,7 @@ var View;
                 card.shape.links[2].movex(w);
                 card.shape.links[3].move(w / 2, h / 2);
             }
-            else if (direction === 1) {
+            else if (direction === 1) { // down
                 w = cardWidth;
                 h = View.cardLength;
                 x = stem.x - w / 2;
@@ -478,7 +491,7 @@ var View;
                 card.shape.links[2].movey(h);
                 card.shape.links[3].move(-w / 2, h / 2);
             }
-            else if (direction === 2) {
+            else if (direction === 2) { // left
                 w = View.cardLength;
                 h = cardWidth;
                 x = stem.x - w;
@@ -487,7 +500,7 @@ var View;
                 card.shape.links[2].movex(-w);
                 card.shape.links[3].move(-w / 2, -h / 2);
             }
-            else if (direction === 3) {
+            else if (direction === 3) { // up
                 w = cardWidth;
                 h = View.cardLength;
                 x = stem.x - w / 2;
@@ -544,7 +557,14 @@ var View;
                 this.drawCard(faction.root);
             }
             // uncontrolled
-            //
+            var open = Model.Deck.openCards;
+            var cursor = new Util.Point(View.cardLength / 2, 10);
+            for (var _b = 0, open_1 = open; _b < open_1.length; _b++) {
+                var card = open_1[_b];
+                CardShape.orient(card, cursor, 1);
+                View.drawCard(card);
+                cursor.movex(View.cardLength);
+            }
             // hand
             // hovered
             if (View.hoveredCard) {
@@ -600,9 +620,14 @@ var View;
             View.hoveredButton = null;
             for (var _i = 0, _a = View.detailButtons; _i < _a.length; _i++) {
                 var btn = _a[_i];
-                if (btn.caption === 'move' && !card.parent) {
-                    continue;
-                } // make root immobile
+                if (btn.caption === 'move') {
+                    if (card.cardType === Model.CardType.root) {
+                        continue;
+                    } // make root immobile
+                    if (card.cardLocation === Model.CardLocation.open) {
+                        continue;
+                    } // make uncontrolled cards immobile
+                }
                 btn.moveTo(cursor);
                 var hovered = (mouse && btn.rect.contains(mouse));
                 if (hovered) {
@@ -633,7 +658,7 @@ var View;
             var _this = this;
             // orient was called before drawCard
             CardShape.drawBorder(card);
-            if (card.parent) {
+            if (card.cardType === Model.CardType.group) {
                 View.context.fillStyle = View.colors.card.fill;
             }
             else {

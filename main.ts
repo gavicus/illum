@@ -97,8 +97,8 @@ namespace Model {
 	export class Model {
 		public static factions: Faction[] = [];
 
-		static getHoveredCard(mouse: Util.Point, cardSet: Card[]): Card {
-			for (let card of Deck.tableCards) {
+		static getHoveredCard(mouse: Util.Point, cardSet: Card[] = Deck.tableCards): Card {
+			for (let card of cardSet) {
 				if(card.shape.rect.contains(mouse)) { return card; }
 			}
 			return null;
@@ -138,6 +138,7 @@ namespace Model {
 		root: Card;
 		constructor(){
 			this.root = Deck.drawRoot();
+			this.root.faction = this;
 			// this.root = Model.newCard(this, 'root', 4);
 			// let child = Model.newCard(this, 'child', 3);
 			// this.root.addCard(child, 2);
@@ -199,6 +200,7 @@ namespace Model {
 			if(this.links[link]!==1){ return false; }
 			this.links[link] = card;
 			card.parent = this;
+			card.faction = this.faction;
 			return true;
 		}
 		decouple() {
@@ -315,14 +317,14 @@ namespace Model {
 		}
 
 		static get structureCards () {
-			return Deck.cards.filter((card) => {return card.cardLocation === CardLocation.structure;});
+			return Deck.cards.filter((card) => {
+				return card.cardLocation === CardLocation.structure
+					&& card.faction === Control.Turn.factionShown;
+			});
 		}
 
 		static get tableCards () {
-			return Deck.cards.filter((card) => {
-				return card.cardLocation === CardLocation.open
-				|| card.cardLocation === CardLocation.structure;
-			});
+			return Deck.openCards.concat(Deck.structureCards);
 		}
 
 		static get openCards () {
@@ -332,6 +334,309 @@ namespace Model {
 }
 
 namespace View {
+	export enum State {table, detail, choice, chooseLink, attackSetup};
+	
+	export class View {
+		static screenState: State = State.table;
+		static readonly arcRadius = 0.15;
+		static readonly widthRatio = 0.7;
+		static canvas: HTMLCanvasElement;
+		static context: CanvasRenderingContext2D;
+		static cardLength = 50; // changes with zoom
+		static detailButtons: Button[];
+		static factionButtons: Button[];
+		static hoveredButton: Button = null;
+		static hoveredCard: Model.Card = null;
+		static focus: Util.Point;
+		static textSize = 10;
+		static colors = {
+			card: {
+				border: '#bbb',
+				link: '#444',
+				fill: '#f0f0f0',
+				text: 'gray',
+				hoveredBorder: '#f80',
+			},
+			rootCard: {
+				fill: '#888',
+				link: '#fff',
+				text: 'white',
+			},
+			screen: {
+				fill: '#f8f8f8',
+				headerFill: '#eee',
+			},
+		};
+
+		public static init () {
+			View.canvas = <HTMLCanvasElement>document.getElementById('canvas');
+			View.context = View.canvas.getContext('2d');
+			View.focus = new Util.Point(View.canvas.width/2, View.canvas.height/2);
+			View.detailButtons = [
+				new Button('move', Control.Control.btnMoveGroup, new Util.Point(20, 100)),
+				new Button('attack', Control.Control.btnAttack, new Util.Point(100,100)),
+			];
+			// faction selection buttons
+			View.factionButtons = [];
+			let cursor = new Util.Point(10,View.canvas.height-10);
+			for (let i=Model.Model.factions.length-1; i>=0; --i) {
+				let faction = Model.Model.factions[i];
+				let btn = new Button(faction.root.name, Control.Control.btnShowFaction, cursor.clone());
+				btn.data = faction;
+				btn.outline = false;
+				btn.textPoint = cursor.clone();
+				btn.textAlign = 'left';
+				btn.data = faction;
+				View.factionButtons.push(btn);
+				cursor.movey(-14);
+			}
+			this.orientRootCards(Model.Model.factions);
+
+			PageAttack.init();
+
+			this.draw();
+		}
+		public static dragFocus(delta: Util.Point) {
+			View.focus.move(delta.x, delta.y);
+		}
+		public static draw(){
+			this.clear();
+
+			// structure
+			let faction = Control.Turn.factionShown;
+			CardShape.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
+			this.drawCard(faction.root);
+			
+			// header: uncontrolled
+			View.context.fillStyle = View.colors.screen.headerFill;
+			View.context.fillRect(0,0, View.canvas.width, View.cardLength * 1.4);
+			let open = Model.Deck.openCards;
+			let cursor = new Util.Point(View.cardLength/2, 10);
+			for (let card of open) {
+				CardShape.orient(card, cursor, 1);
+				View.drawCard(card);
+				cursor.movex(View.cardLength);
+			}
+
+			// footer: faction selection, hand, buttons
+			let height = View.cardLength * 1.4;
+			View.context.fillStyle = View.colors.screen.headerFill;
+			View.context.fillRect(0,View.canvas.height-height, View.canvas.width, height);
+			// faction selection
+			for (let btn of View.factionButtons) {
+				if (btn.data === Control.Turn.faction) { btn.font = View.boldFont; }
+				else { btn.font = View.font; }
+				btn.draw(View.context, btn === View.hoveredButton);
+			}
+
+			// hovered
+			if(View.hoveredCard){
+				CardShape.drawBorder(View.hoveredCard);
+				View.context.strokeStyle = View.colors.card.hoveredBorder;
+				View.context.stroke();
+			}
+		}
+		public static drawLinkChoice(closest){
+			View.draw();
+			if (!closest) { return; }
+			View.beginPath();
+			View.context.arc(closest.point.x, closest.point.y, View.getArcSize(), 0, 2*Math.PI, false);
+			View.context.strokeStyle = 'red';
+			View.context.stroke();
+		}
+		public static drawDetail(card: Model.Card, mouse: Util.Point = null){
+			View.clear();
+			let gutter = 20;
+			let lineHeight = 16;
+			let cursor = new Util.Point(gutter, gutter);
+			// name
+			View.context.font = View.boldFont;
+			View.context.fillStyle = View.colors.card.text;
+			View.context.textAlign = 'left';
+			View.context.textBaseline = 'alphabetic';
+			let cardName = card.name;
+			if (card.cardType === Model.CardType.root) {
+				cardName = 'The ' + card.name;
+			}
+			View.context.fillText(cardName, cursor.x, cursor.y);
+			// numbers
+			cursor.movey(lineHeight);
+			View.context.font = View.font;
+			let atk = '' + card.attack;
+			if(card.aid > 0) { atk += '/' + card.aid; }
+			let def = card.defense;
+			View.context.fillText('attack: ' + atk + '  defense: ' + def, cursor.x, cursor.y);
+			cursor.movey(lineHeight);
+			View.context.fillText('income: '+card.income, cursor.x, cursor.y);
+			// description
+			cursor.movey(lineHeight);
+			View.context.fillText(card.description, cursor.x, cursor.y);
+			// children
+			cursor.movey(lineHeight*2);
+			View.context.fillText('children', cursor.x, cursor.y);
+			cursor.movey(lineHeight);
+			View.context.font = View.font;
+			let children = card.children.map((child)=>{return child.name}).join(', ') || 'none';
+			View.context.fillText(children, cursor.x, cursor.y);
+
+			// TODO: buttons: move, attack, etc.
+			cursor.movey(lineHeight*2);
+			View.hoveredButton = null;
+			for (let btn of View.detailButtons) {
+				if (btn.caption === 'move') {
+					if (card.cardType === Model.CardType.root) { continue; } // make root immobile
+					if (card.cardLocation === Model.CardLocation.open) { continue; } // make uncontrolled cards immobile
+				}
+				else if (btn.caption === 'attack') {
+					if (card.cardLocation !== Model.CardLocation.structure) { continue; }
+					if (card.faction !== Control.Turn.faction) { continue; }
+					// TODO: allow for groups that can act twice
+					if (Control.Turn.getHasActed(card)) { continue; }
+				}
+				btn.moveTo(cursor);
+				let hovered = (mouse && btn.rect.contains(mouse));
+				if (hovered) { View.hoveredButton = btn; }
+
+				CardShape.drawRoundRect(btn.rect, 10);
+				View.context.fillStyle = hovered ? Button.colors.hoveredFill : Button.colors.fill;
+				View.context.fill();
+				View.context.strokeStyle = Button.colors.border;
+				View.context.stroke();
+				View.context.font = View.boldFont;
+				View.context.fillStyle = hovered ? Button.colors.hoveredText : Button.colors.text;
+				View.context.textAlign = 'center';
+				View.context.textBaseline = 'middle';
+				let center = btn.rect.center;
+				View.context.fillText(btn.caption, center.x, center.y);
+
+				cursor.movex(Button.size.x+gutter);
+			}
+		}
+		public static clear(){
+			let w = View.canvas.width;
+			let h = View.canvas.height;
+			let c = View.context;
+			c.fillStyle = View.colors.screen.fill;
+			c.fillRect(0,0,w,h);
+		}
+		public static drawCard(card: Model.Card){
+			// orient was called before drawCard
+			CardShape.drawBorder(card);
+			if(card.cardType === Model.CardType.group){
+				View.context.fillStyle = View.colors.card.fill;
+			}
+			else{
+				View.context.fillStyle = View.colors.rootCard.fill;
+			}
+			View.context.strokeStyle = View.colors.card.border;
+			View.context.fill();
+			View.context.stroke();
+
+			// draw the links
+			for (let index = 0; index < card.links.length; ++index){
+				let inward = false;
+				if (card.links[index] === 0){
+					if (index === 0) { inward = true; } else { continue; }
+				}
+				let apex = card.shape.links[index].clone();
+				let center = card.shape.rect.center;
+				CardShape.drawLink(apex,center,inward);
+				if(card.cardType === Model.CardType.group){
+					View.context.fillStyle = View.colors.card.link;
+				} else{ View.context.fillStyle = View.colors.rootCard.link; }
+				View.context.fill();
+			}
+
+			// draw has-acted icon
+			if (Control.Turn.getHasActed(card)) {
+				let center = new Util.Point(card.shape.rect.lowerRight.x, card.shape.rect.upperLeft.y);
+				let radius = View.cardLength * CardShape.arrowSize;
+				center.move(-radius, radius);
+				View.context.arc(center.x, center.y, radius-2, 0, Math.PI*2);
+				View.context.fillStyle =
+					card.cardType === Model.CardType.group
+					? View.colors.card.link
+					: View.colors.rootCard.link;
+				View.context.fill();
+			}
+
+			// draw card name
+			let center = card.shape.rect.center;
+			if(card.cardType === Model.CardType.group){
+				View.context.fillStyle = View.colors.card.text;
+			} else {
+				View.context.fillStyle = View.colors.rootCard.text;
+			}
+			View.context.font = View.font;
+			View.context.textAlign = 'center';
+			View.context.textBaseline = 'middle';
+			View.context.fillText(
+				card.name.substring(0,View.cardLength/8),
+				center.x, center.y
+			);
+
+			// draw the card's children
+			card.links.forEach((child, direction) => {
+				if(typeof child !== 'number'){
+					let childDirection = (card.shape.rotation + direction + 2) % 4;
+					CardShape.orient(child, card.shape.links[direction], childDirection);
+					this.drawCard(child);
+				}
+			});
+		}
+		public static drawPage(){
+			View.clear();
+			if (View.screenState === State.attackSetup) { PageAttack.draw(View.context); }
+		};
+		public static getHoveredButton(btnSet: Button[], mouse: Util.Point): Button {
+			for (let btn of btnSet) {
+				if(btn.hovered(mouse)) { return btn; }
+			}
+			return null;
+		}
+		public static orientRootCards(factions: Model.Faction[]) { // should be called only once
+			factions.forEach((faction, index) => {
+				faction.root.shape.rootPoint = new Util.Point(-View.cardLength/2, -View.cardLength/2);
+				CardShape.orient(faction.root, faction.root.shape.rootPoint, 0);
+			});
+		}
+		public static get font(): string {
+			return View.textSize + "px sans-serif";
+		}
+		public static get boldFont(): string {
+			return "bold " + View.textSize + "px sans-serif";
+		}
+
+		// page events
+		public static onMouseMove(mouse: Util.Point) {
+			if (this.screenState === State.attackSetup) {
+				PageAttack.onMouseMove(mouse);
+			}
+		}
+		public static onMouseClick(mouse: Util.Point) {
+			if (this.screenState === State.attackSetup) {
+				PageAttack.onMouseClick(mouse);
+			}
+		}
+
+		// draw helper functions
+		static beginPath(){
+			this.context.beginPath();
+		}
+		static moveTo(p:Util.Point){
+			this.context.moveTo(p.x, p.y);
+		}
+		static lineTo(p:Util.Point){
+			this.context.lineTo(p.x, p.y);
+		}
+		static arcTo(p1:Util.Point, p2:Util.Point, rad=this.getArcSize()){
+			this.context.arcTo(p1.x, p1.y, p2.x, p2.y, rad);
+		}
+		static getArcSize(): number {
+			return this.arcRadius * this.cardLength;
+		}
+	}
+
 	class CardShape {
 		static arrowSize = 0.1;
 		static cornerSize = 0.15;
@@ -422,11 +727,55 @@ namespace View {
 		}
 	}
 
-	class Button {
-		readonly size = new Util.Point(80, 18);
+	export class Button {
+		public static readonly size = new Util.Point(80, 18);
 		public rect: Util.Rectangle;
-		constructor (public caption: string, private ulCorner) {
-			this.rect = new Util.Rectangle(ulCorner.x, ulCorner.y, this.size.x, this.size.y);
+		public font = View.boldFont;
+		public outline = true;
+		public selected = false;
+		public visible = true;
+		public textAlign = 'center';
+		public data: any;
+		public textPoint: Util.Point;
+
+		static colors = {
+			fill: '#efefef',
+			border: '#ccc',
+			text: 'gray',
+			hoveredFill: 'gray',
+			hoveredText: 'orange',
+			selectedFill: '#ccf',
+		};
+
+		static getHoveredButton (buttonSet: Button[], mouse: Util.Point): Button {
+			for (let btn of buttonSet) {
+				if(btn.hovered(mouse)) { return btn; }
+			}
+			return null;
+		}
+
+		constructor (public caption: string, public callback: (button: View.Button) => void, private ulCorner) {
+			this.rect = new Util.Rectangle(ulCorner.x, ulCorner.y, Button.size.x, Button.size.y);
+			this.textPoint = this.rect.center;
+		}
+		draw (c: CanvasRenderingContext2D, hovered: boolean) {
+			if (!this.visible) { return; }
+			if (this.outline) {
+				CardShape.drawRoundRect(this.rect, 10);
+
+				if (hovered) { View.context.fillStyle = Button.colors.hoveredFill; }
+				else if(this.selected) { View.context.fillStyle = Button.colors.selectedFill; }
+				else { View.context.fillStyle = Button.colors.fill; }
+
+				View.context.fill();
+				View.context.strokeStyle = Button.colors.border;
+				View.context.stroke();
+			}
+			View.context.font = this.font;
+			View.context.fillStyle = hovered ? Button.colors.hoveredText : Button.colors.text;
+			View.context.textAlign = this.textAlign;
+			View.context.textBaseline = 'middle';
+			View.context.fillText(this.caption, this.textPoint.x, this.textPoint.y);
 		}
 		hovered (mouse: Util.Point): boolean {
 			return this.rect.contains(mouse);
@@ -438,256 +787,124 @@ namespace View {
 		}
 	}
 
-	export class View {
-		static canvas: HTMLCanvasElement;
-		static context: CanvasRenderingContext2D;
-		static readonly arcRadius = 0.15;
-		static readonly widthRatio = 0.7;
-		static cardLength = 50; // changes with zoom
-		static detailButtons: Button[];
-		static hoveredButton: Button = null;
-		static hoveredCard: Model.Card = null;
-		static focus: Util.Point;
-		static colors = {
-			button: {
-				fill: '#efefef',
-				border: '#ccc',
-				text: 'gray',
-				hoveredFill: 'gray',
-				hoveredText: 'white',
-			},
-			card: {
-				border: '#bbb',
-				link: '#444',
-				fill: '#f0f0f0',
-				text: 'gray',
-				hoveredBorder: '#f80',
-			},
-			rootCard: {
-				fill: '#888',
-				link: '#fff',
-				text: 'white',
-			},
-			screen: {
-				fill: '#f8f8f8',
-			},
-		};
+	enum AttackState {setup, success, failure};
+	export class PageAttack {
+		public static state: AttackState;
+		public static buttons: Button[] = [];
+		public static hoveredButton: Button = null;
+		public static attackType = 'control';
 
-		public static init () {
-			View.canvas = <HTMLCanvasElement>document.getElementById('canvas');
-			View.context = View.canvas.getContext('2d');
-			View.focus = new Util.Point(View.canvas.width/2, View.canvas.height/2);
-			View.detailButtons = [
-				new Button('move', new Util.Point(20, 100)),
-				new Button('control', new Util.Point(100,100)),
-			];
-			this.orientRootCards(Model.Model.factions);
-			this.draw();
-
-			console.log('cursor',View.canvas.style.cursor);
+		public static init() {
+			this.reset();
+			let lineHeight = 22;
+			let cursor = new Util.Point(10,150);
+			this.buttons.push( new Button('execute', this.btnExecuteAttack, cursor) );
+			cursor.movey(lineHeight);
+			this.buttons.push( new Button('cancel', this.btnCancelAttack, cursor) );
+			cursor.set(View.canvas.width - Button.size.x - 10, 10);
+			let cmd1 = new Button('control', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
+			cursor.movey(lineHeight);
+			let cmd2 = new Button('neutralize', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
+			cursor.movey(lineHeight);
+			let cmd3 = new Button('destroy', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
+			cmd1.selected = true;
+			let data = {group:[cmd1,cmd2,cmd3]};
+			cmd1.data = data;
+			cmd2.data = data;
+			cmd3.data = data;
+			this.buttons.push(cmd1,cmd2,cmd3);
 		}
 
-		public static dragFocus(delta: Util.Point) {
-			View.focus.move(delta.x, delta.y);
+		public static reset() {
+			this.state = AttackState.setup;
 		}
-		public static draw(){
-			this.clear();
-			// structures
-			for (let faction of Model.Model.factions) {
-				CardShape.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
-				this.drawCard(faction.root);
-			}
-			// uncontrolled
-			let open = Model.Deck.openCards;
-			let cursor = new Util.Point(View.cardLength/2, 10);
-			for (let card of open) {
-				CardShape.orient(card, cursor, 1);
-				View.drawCard(card);
-				cursor.movex(View.cardLength);
-			}
-			// hand
-			// hovered
-			if(View.hoveredCard){
-				CardShape.drawBorder(View.hoveredCard);
-				View.context.strokeStyle = View.colors.card.hoveredBorder;
-				View.context.stroke();
-			}
-		}
-		public static drawLinkChoice(closest){
-			View.draw();
-			if (!closest) { return; }
-			View.beginPath();
-			View.context.arc(closest.point.x, closest.point.y, View.getArcSize(), 0, 2*Math.PI, false);
-			View.context.strokeStyle = 'red';
-			View.context.stroke();
-		}
-		public static drawDetail(card: Model.Card, mouse: Util.Point = null){
-			// TODO: make root immobile -- hide 'move' button on detail screen
-			
-			View.clear();
-			let gutter = 20;
-			let lineHeight = 16;
-			let textSize = 10;
-			let cursor = new Util.Point(gutter, gutter);
-			// name
-			let bodyText = textSize + "px sans-serif";
-			let boldText = "bold " + textSize + "px sans-serif";
-			View.context.font = boldText;
-			View.context.fillStyle = View.colors.card.text;
-			View.context.textAlign = 'left';
-			View.context.textBaseline = 'alphabetic';
-			let cardName = card.name;
-			if (card.cardType === Model.CardType.root) {
-				cardName = 'The ' + card.name;
-			}
-			View.context.fillText(cardName, cursor.x, cursor.y);
-			// numbers
+
+		public static draw (ctx: CanvasRenderingContext2D) {
+			let leftMargin = 10;
+			let lineHeight = 15;
+			let cursor = new Util.Point(leftMargin,lineHeight);
+			ctx.fillStyle = View.colors.card.text;
+			ctx.font = View.font;
+			ctx.textAlign = 'left';
+			ctx.textBaseline = 'alphabetic';
+			let typeLine = 'attack type: ' + this.attackType;
+			ctx.fillText(typeLine, cursor.x, cursor.y);
 			cursor.movey(lineHeight);
-			View.context.font = bodyText;
-			View.context.fillText(card.attack+'/'+card.defense, cursor.x, cursor.y);
+			let atkLine = 'attacker: '+Control.Attack.attacker.name + ' (' + Control.Attack.attacker.attack + ')';
+			ctx.fillText(atkLine, cursor.x, cursor.y);
 			cursor.movey(lineHeight);
-			View.context.fillText('income: '+card.income, cursor.x, cursor.y);
-			// description
-			cursor.movey(lineHeight);
-			View.context.fillText(card.description, cursor.x, cursor.y);
-			// children
+			let defLine = 'defender: '+Control.Attack.defender.name + ' (' + Control.Attack.defender.defense + ')';
+			ctx.fillText(defLine, cursor.x, cursor.y);
+
+			let totalAtk = Control.Attack.attacker.attack;
+			let totalDef = Control.Attack.defender.defense;
+
 			cursor.movey(lineHeight*2);
-			View.context.fillText('children', cursor.x, cursor.y);
+			ctx.fillText('total attack: '+totalAtk, cursor.x, cursor.y);
 			cursor.movey(lineHeight);
-			View.context.font = bodyText;
-			let children = card.children.map((child)=>{return child.name}).join(', ') || 'none';
-			View.context.fillText(children, cursor.x, cursor.y);
+			ctx.fillText('total totalDef: '+totalDef, cursor.x, cursor.y);
+			cursor.movey(lineHeight);
+			ctx.fillText('roll needed: '+ (totalAtk - totalDef) + ' or less', cursor.x, cursor.y);
 
-			// TODO: buttons: move, attack, etc.
-			cursor.movey(lineHeight*2);
-			View.hoveredButton = null;
-			for (let btn of View.detailButtons) {
-				if (btn.caption === 'move') {
-					if (card.cardType === Model.CardType.root) { continue; } // make root immobile
-					if (card.cardLocation === Model.CardLocation.open) { continue; } // make uncontrolled cards immobile
-				} else if(btn.caption === 'control') {
-					if(card.cardLocation !== Model.CardLocation.structure) { continue; }
-				}
-				btn.moveTo(cursor);
-				let hovered = (mouse && btn.rect.contains(mouse));
-				if (hovered) { View.hoveredButton = btn; }
-				CardShape.drawRoundRect(btn.rect, 10);
-				View.context.fillStyle = hovered ? View.colors.button.hoveredFill : View.colors.button.fill;
-				View.context.fill();
-				View.context.strokeStyle = View.colors.button.border;
-				View.context.stroke();
-				View.context.font = boldText;
-				View.context.fillStyle = hovered ? View.colors.button.hoveredText : View.colors.button.text;
-				View.context.textAlign = 'center';
-				View.context.textBaseline = 'middle';
-				let center = btn.rect.center;
-				View.context.fillText(btn.caption, center.x, center.y);
-				cursor.movex(btn.size.x+gutter);
+
+			// buttons
+			for (let btn of this.buttons) {
+				btn.draw(ctx, btn === this.hoveredButton);
 			}
 		}
-		public static clear(){
-			let w = View.canvas.width;
-			let h = View.canvas.height;
-			let c = View.context;
-			c.fillStyle = View.colors.screen.fill;
-			c.fillRect(0,0,w,h);
+
+		// button events
+		public static btnAtkType(button: View.Button) {
+			for (let btn of button.data.group) {
+				btn.selected = false;
+			}
+			button.selected = true;
+			this.attackType = button.caption;
+			View.drawPage();
 		}
-		public static drawCard(card: Model.Card){
-			// orient was called before drawCard
-			CardShape.drawBorder(card);
-			if(card.cardType === Model.CardType.group){
-				View.context.fillStyle = View.colors.card.fill;
-			}
-			else{
-				View.context.fillStyle = View.colors.rootCard.fill;
-			}
-			View.context.strokeStyle = View.colors.card.border;
-			View.context.fill();
-			View.context.stroke();
-
-			// draw the links
-			for (let index = 0; index < card.links.length; ++index){
-				let inward = false;
-				if (card.links[index] === 0){
-					if (index === 0) { inward = true; } else { continue; }
-				}
-				let apex = card.shape.links[index].clone();
-				let center = card.shape.rect.center;
-				CardShape.drawLink(apex,center,inward);
-				if(card.cardType === Model.CardType.group){
-					View.context.fillStyle = View.colors.card.link;
-				} else{ View.context.fillStyle = View.colors.rootCard.link; }
-				View.context.fill();
-			}
-
-			// draw card name
-			let center = card.shape.rect.center;
-			if(card.cardType === Model.CardType.group){
-				View.context.fillStyle = View.colors.card.text;
-			} else {
-				View.context.fillStyle = View.colors.rootCard.text;
-			}
-			View.context.textAlign = 'center';
-			View.context.textBaseline = 'middle';
-			View.context.fillText(
-				card.name.substring(0,View.cardLength/8),
-				center.x, center.y
-			);
-
-			// draw the card's children
-			card.links.forEach((child, direction) => {
-				if(typeof child !== 'number'){
-					let childDirection = (card.shape.rotation + direction + 2) % 4;
-					CardShape.orient(child, card.shape.links[direction], childDirection);
-					this.drawCard(child);
-				}
-			});
+		public static btnExecuteAttack(button: Button) {
+			console.log('btnExecuteAttack');
+		}
+		public static btnCancelAttack(button: Button) {
+			console.log('btnCancelAttack');
 		}
 		
-		public static orientRootCards(factions: Model.Faction[]) { // should be called only once
-			factions.forEach((faction, index) => {
-				faction.root.shape.rootPoint = new Util.Point(-View.cardLength/2, -View.cardLength/2);
-				CardShape.orient(faction.root, faction.root.shape.rootPoint, 0);
-			});
+		// mouse event
+		public static onMouseMove(mouse: Util.Point){
+			let buttonSet = this.buttons.filter((btn) => btn.visible===true);
+			this.hoveredButton = Button.getHoveredButton(buttonSet, mouse);
+			View.drawPage();
 		}
-
-		// draw helper functions
-		static beginPath(){
-			this.context.beginPath();
+		public static onMouseClick(mouse: Util.Point) {
+			if (this.hoveredButton) {
+				this.hoveredButton.callback(this.hoveredButton);
+			}
 		}
-		static moveTo(p:Util.Point){
-			this.context.moveTo(p.x, p.y);
-		}
-		static lineTo(p:Util.Point){
-			this.context.lineTo(p.x, p.y);
-		}
-		static arcTo(p1:Util.Point, p2:Util.Point, rad=this.getArcSize()){
-			this.context.arcTo(p1.x, p1.y, p2.x, p2.y, rad);
-		}
-		static getArcSize(): number {
-			return this.arcRadius * this.cardLength;
-		}
+		
 	}
 }
 
 namespace Control {
-	enum State {table, detail, choice, chooseLink};
+	export enum Command {none, placeCard, attack};
 
 	export class Control {
-		linkTargets: Model.LinkTarget[];
-		hoveredCard: Model.Card = null;
-		hoveredLink: Model.LinkTarget = null;
-		screenState: State = State.table;
-		factionIndex = 0;
-		mouse: any;
-		command: string = null;
-		attacker: Model.Card = null;
-		defender: Model.Card = null;
+		public static linkTargets: Model.LinkTarget[];
+		public static hoveredCard: Model.Card = null;
+		public static hoveredLink: Model.LinkTarget = null;
+		public static mouse: any;
+		public static command: Command = null;
+		public static attacker: Model.Card = null;
+		public static defender: Model.Card = null;
 
-		constructor(){
+		public static init(){
 			Model.Deck.init();
-			Model.Model.initFactions(1);
-			this.drawOpenCards();
+			Model.Model.initFactions(2);
+			Turn.initTurn(0);
+			
+			// starting uncontrolled cards
+			for (let i=0; i<4; ++i) {
+				let card = Model.Deck.drawGroup().cardLocation = Model.CardLocation.open;
+			}
 
 			View.View.init();
 
@@ -697,50 +914,50 @@ namespace Control {
 				last: null,
 			};
 		}
-		get activeFaction(){
-			return Model.Model.factions[this.factionIndex];
-		}
-		beginChooseLink(cardSet: Model.Card[] = Model.Deck.structureCards){
+
+		public static beginChooseLink(cardSet: Model.Card[] = Model.Deck.structureCards){
 			// TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
-			this.screenState = State.chooseLink;
+			View.View.screenState = View.State.chooseLink;
 			View.View.draw();
 			this.linkTargets = Model.Model.getLinkTargets(View.View.hoveredCard, cardSet);
 		}
-		beginChooseTarget(){
-			this.screenState = State.table;
+		public static beginChooseTarget(){
+			View.View.screenState = View.State.table;
 			View.View.canvas.style.cursor = 'crosshair';
 			View.View.draw();
 		}
-		drawOpenCards() {
-			for (let i=0; i<4; ++i) {
-				let card = Model.Deck.drawGroup().cardLocation = Model.CardLocation.open;
-			}
-		}
-		onMouseDown(event: MouseEvent){
+		public static onMouseDown(event: MouseEvent){
 			this.mouse.down = true;
 			this.mouse.drag = false;
 			this.mouse.last = new Util.Point(event.offsetX, event.offsetY);
 		}
-		onMouseMove(event: MouseEvent){
+		public static onMouseMove(event: MouseEvent){
 			let mouse = new Util.Point(event.offsetX, event.offsetY);
 			if (this.mouse.down && !mouse.equals(this.mouse.last)) {
 				this.mouse.drag = true;
 			}
-			if (this.screenState === State.table){
+			if (View.View.screenState === View.State.table){
+				let dirty = false;
 				if(this.mouse.drag){
 					let delta = mouse.minus(this.mouse.last);
 					View.View.dragFocus(delta);
-					View.View.draw();
+					dirty = true;
 				}
 				else {
 					let hovered = Model.Model.getHoveredCard(mouse, Model.Deck.tableCards);
 					if(hovered !== View.View.hoveredCard){
 						View.View.hoveredCard = hovered;
-						View.View.draw();
+						dirty = true;
+					}
+					let btn = View.View.getHoveredButton(View.View.factionButtons, mouse);
+					if (btn !== View.View.hoveredButton) {
+						View.View.hoveredButton = btn;
+						dirty = true;
 					}
 				}
+				if (dirty) { View.View.draw(); }
 			}
-			else if (this.screenState === State.chooseLink) {
+			else if (View.View.screenState === View.State.chooseLink) {
 				let closest = null;
 				let sqDist = 0;
 				let minDist = Math.pow(View.View.cardLength, 2);
@@ -755,89 +972,184 @@ namespace Control {
 				this.hoveredLink = closest;
 				View.View.drawLinkChoice(closest);
 			}
-			else if (this.screenState === State.detail) {
+			else if (View.View.screenState === View.State.detail) {
 				View.View.drawDetail(View.View.hoveredCard, mouse);
 			}
+			else { View.View.onMouseMove(mouse); }
 			this.mouse.last = mouse;
 		}
-		onMouseOut(event: MouseEvent){
+		public static onMouseOut(event: MouseEvent){
 			this.mouse.down = false;
 			this.mouse.drag = false;
 		}
-		onMouseUp(event: MouseEvent){
+		public static onMouseUp(event: MouseEvent){
 			let mouse = new Util.Point(event.offsetX, event.offsetY);
-			if(this.screenState === State.table){
-				if(this.mouse.drag){
-				}
-				else if(View.View.hoveredCard){
-					if (this.command == 'control') {
+			
+			if(View.View.screenState === View.State.table){
+				if(this.mouse.drag){}
+				else if (View.View.hoveredButton) {
+					// let command = View.View.hoveredButton.command;
+					// let cmdAry = command.split(' ');
+					// if (cmdAry[0] === 'faction') {
+					// 	Turn.factionShownIndex = parseInt(cmdAry[1]);
+					// 	View.View.draw();
+					// }
+					View.View.hoveredButton.callback(View.View.hoveredButton);
+ 				}
+				else if (View.View.hoveredCard){
+					if (this.command == Command.attack) {
+						// TODO: allow cancel
 						View.View.canvas.style.cursor = '';
-						this.defender = View.View.hoveredCard;
+						Attack.setDefender(View.View.hoveredCard);
+						View.View.screenState = View.State.attackSetup;
+						View.PageAttack.reset();
+						View.View.drawPage();
+
+						// Turn.setHasActed(this.attacker);
+
 						// TODO: handle control attempt
-						View.View.hoveredCard.cardLocation = Model.CardLocation.structure;
+
+						// View.View.hoveredCard.cardLocation = Model.CardLocation.structure;
+
 						// TODO: new card should only link to controlling card
 						// place the newly controlled card
-						this.beginChooseLink([this.attacker]);
-						this.command = null;
-					} else {
-						this.screenState = State.detail;
+
+						// this.beginChooseLink([this.attacker]);
+						// this.command = null;
+
+					}
+					else {
+						View.View.screenState = View.State.detail;
 						View.View.drawDetail(View.View.hoveredCard, mouse);
 					}
 				}
 			}
-			else if (this.screenState === State.detail) {
+			else if (View.View.screenState === View.State.detail) {
 				// TODO: buttons, options, etc.
 				if (View.View.hoveredButton) {
-					let caption = View.View.hoveredButton.caption;
-					if (caption === 'move') {
-						this.beginChooseLink();
-					} else if (caption === 'control') {
-						this.attacker = View.View.hoveredCard;
-						this.command = caption;
-						this.beginChooseTarget();
-					}
+					// let caption = View.View.hoveredButton.caption;
+					// if (caption === 'move') {
+					// 	this.beginChooseLink();
+					// } else if (caption === 'control') {
+					// 	Attack.setAttacker(View.View.hoveredCard);
+					// 	this.command = Command.attack;
+					// 	this.beginChooseTarget();
+					// }
+					View.View.hoveredButton.callback(View.View.hoveredButton);
 				}
 				else {
-					this.screenState = State.table;
+					View.View.screenState = View.State.table;
 					View.View.draw();
 				}
 			}
-			else if (this.screenState === State.chooseLink) {
+			else if (View.View.screenState === View.State.chooseLink) {
 				// move the card !
 				// TODO: check for card overlap
 				if (this.hoveredLink) {
 					View.View.hoveredCard.decouple();
 					this.hoveredLink.card.addCard(View.View.hoveredCard, this.hoveredLink.linkIndex);
 				}
-				this.screenState = State.table;
+				View.View.screenState = View.State.table;
 				View.View.canvas.style.cursor = 'arrow';
 				View.View.draw();
+			}
+			else {
+				if(this.mouse.drag){}
+				else { View.View.onMouseClick(mouse); }
 			}
 
 			this.mouse.down = false;
 			this.mouse.drag = false;
 		}
+	
+		public static btnAttack(button: View.Button) {
+			Attack.setAttacker(View.View.hoveredCard);
+			Control.command = Command.attack;
+			Control.beginChooseTarget();
+		}
+		public static btnMoveGroup(button: View.Button) {
+			console.log('btnMoveGroup');
+		}
+		public static btnShowFaction(button: View.Button) {
+			console.log('btnShowFaction', button.data);
+			Turn.factionShownIndex = Model.Model.factions.indexOf(button.data);
+			View.View.draw();
+		}
+	}
+
+	export class Attack {
+		private static _attacker: Model.Card;
+		private static _defender: Model.Card;
+		public static clear(){
+			this._attacker = null;
+			this._defender = null;
+		}
+		public static setAttacker(a:Model.Card){
+			this._attacker = a;
+		}
+		public static setDefender(d:Model.Card){
+			this._defender = d;
+		}
+		public static get attacker(){ return Attack._attacker; }
+		public static get defender(){ return Attack._defender; }
+	}
+
+	export class Turn {
+		static factionIndex: number;
+		static factionShownIndex: number;
+		static hasActed: Model.Card[];
+		static hasActedTwice: Model.Card[];
+
+		static initTurn(factionIndex: number): void {
+			Turn.factionIndex = factionIndex;
+			Turn.factionShownIndex = factionIndex;
+			Turn.hasActed = [];
+			Turn.hasActedTwice = [];
+		}
+
+		static getHasActed(group: Model.Card): boolean {
+			return Turn.hasActed.indexOf(group) > -1;
+		}
+
+		static getHasActedTwice(group: Model.Card): boolean {
+			return Turn.hasActedTwice.indexOf(group) > -1;
+		}
+
+		static setHasActed(group: Model.Card): void {
+			Turn.hasActed.push(group);
+		}
+
+		static setHasActedTwice(group: Model.Card): void {
+			Turn.hasActedTwice.push(group);
+		}
+
+		static get faction(): Model.Faction {
+			return Model.Model.factions[Turn.factionIndex];
+		}
+
+		static get factionShown(): Model.Faction {
+			return Model.Model.factions[Turn.factionShownIndex];
+		}
 	}
 }
 
-let control: Control.Control;
 window.addEventListener('load', function () {
-	control = new Control.Control();
+	Control.Control.init();
 
 	window.addEventListener('mousemove', function(event: MouseEvent) {
-		control.onMouseMove(event);
+		Control.Control.onMouseMove(event);
 	});
 
 	window.addEventListener('mousedown', function(event: MouseEvent) {
-		control.onMouseDown(event);
+		Control.Control.onMouseDown(event);
 	});
 
 	window.addEventListener('mouseup', function(event: MouseEvent) {
-		control.onMouseUp(event);
+		Control.Control.onMouseUp(event);
 	});
 
 	window.addEventListener('mouseout', function(event: MouseEvent) {
-		control.onMouseOut(event);
+		Control.Control.onMouseOut(event);
 	});
 
 });

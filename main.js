@@ -185,6 +185,9 @@ var Model;
             // let grand2 = Model.newCard(this, 'grand2', 2);
             // child.addCard(grand2,3);
         }
+        Faction.prototype.collectIncome = function () {
+            this.root.collectIncome();
+        };
         return Faction;
     }());
     Model_1.Faction = Faction;
@@ -207,6 +210,7 @@ var Model;
     var Card = /** @class */ (function () {
         function Card(name, links) {
             if (links === void 0) { links = 4; }
+            this.cash = 0;
             this.name = name;
             this.linkCount = links;
             this.parent = null;
@@ -256,6 +260,13 @@ var Model;
             card.parent = this;
             card.faction = this.faction;
             return true;
+        };
+        Card.prototype.collectIncome = function () {
+            this.cash += this.income;
+            for (var _i = 0, _a = this.children; _i < _a.length; _i++) {
+                var child = _a[_i];
+                child.collectIncome();
+            }
         };
         Card.prototype.decouple = function () {
             if (!this.parent) {
@@ -581,7 +592,6 @@ var View;
         };
         View.drawCard = function (card) {
             var _this = this;
-            // orient was called before drawCard
             CardShape.drawBorder(card);
             if (card.cardType === Model.CardType.group) {
                 View.context.fillStyle = View.colors.card.fill;
@@ -638,6 +648,15 @@ var View;
             View.context.textAlign = 'center';
             View.context.textBaseline = 'middle';
             View.context.fillText(card.name.substring(0, View.cardLength / 8), center.x, center.y);
+            // draw card cash
+            if (card.cardLocation === Model.CardLocation.structure) {
+                var cursor = card.shape.rect.lowerRight.clone();
+                cursor.move(-2, -2);
+                View.context.textAlign = 'right';
+                View.context.textBaseline = 'alphabetic';
+                View.context.fillStyle = View.colors.card.cash;
+                View.context.fillText('' + card.cash, cursor.x, cursor.y);
+            }
             // draw the card's children
             card.links.forEach(function (child, direction) {
                 if (typeof child !== 'number') {
@@ -725,6 +744,7 @@ var View;
                 fill: '#f0f0f0',
                 text: 'gray',
                 hoveredBorder: '#f80',
+                cash: 'orange',
             },
             rootCard: {
                 fill: '#888',
@@ -1021,7 +1041,6 @@ var Control;
             Model.Deck.init();
             Model.Model.initFactions(2);
             Turn.initTurn(0);
-            // starting uncontrolled cards
             for (var i = 0; i < 4; ++i) {
                 var card = Model.Deck.drawGroup().cardLocation = Model.CardLocation.open;
             }
@@ -1181,7 +1200,6 @@ var Control;
             this.mouse.drag = false;
         };
         Control.btnAttack = function (button) {
-            console.log('btnAttack');
             Attack.setAttacker(View.View.hoveredCard);
             Control.command = Command.attack;
             Control.beginChooseTarget();
@@ -1236,6 +1254,7 @@ var Control;
             Turn.factionShownIndex = factionIndex;
             Turn.hasActed = [];
             Turn.hasActedTwice = [];
+            Turn.faction.collectIncome();
         };
         Turn.getHasActed = function (group) {
             return Turn.hasActed.indexOf(group) > -1;

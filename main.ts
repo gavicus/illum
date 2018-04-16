@@ -136,7 +136,7 @@ namespace Model {
 
 	export class Faction {
 		root: Card;
-		constructor(){
+		constructor() {
 			this.root = Deck.drawRoot();
 			this.root.faction = this;
 			// this.root = Model.newCard(this, 'root', 4);
@@ -147,12 +147,16 @@ namespace Model {
 			// let grand2 = Model.newCard(this, 'grand2', 2);
 			// child.addCard(grand2,3);
 		}
+		public collectIncome() {
+			this.root.collectIncome();
+		}
 	}
 
 	export enum CardLocation {deck,hand,open,structure,discard};
 	export enum CardType {root,group,special};
 
 	export class Card {
+		// TODO: alignments
 		name: string;
 		faction: Faction;
 		linkCount: number;
@@ -163,10 +167,12 @@ namespace Model {
 		aid: number;
 		defense: number;
 		income: number;
+		cash = 0;
 		description: string;
 		objective: string;
 		cardLocation: CardLocation;
 		cardType: CardType;
+
 		constructor(name: string, links: number=4) {
 			this.name = name;
 			this.linkCount = links;
@@ -202,6 +208,12 @@ namespace Model {
 			card.parent = this;
 			card.faction = this.faction;
 			return true;
+		}
+		collectIncome() {
+			this.cash += this.income;
+			for (let child of this.children) {
+				child.collectIncome();
+			}
 		}
 		decouple() {
 			if(!this.parent) { return; }
@@ -356,6 +368,7 @@ namespace View {
 				fill: '#f0f0f0',
 				text: 'gray',
 				hoveredBorder: '#f80',
+				cash: 'orange',
 			},
 			rootCard: {
 				fill: '#888',
@@ -520,7 +533,6 @@ namespace View {
 			c.fillRect(0,0,w,h);
 		}
 		public static drawCard(card: Model.Card){
-			// orient was called before drawCard
 			CardShape.drawBorder(card);
 			if(card.cardType === Model.CardType.group){
 				View.context.fillStyle = View.colors.card.fill;
@@ -574,6 +586,16 @@ namespace View {
 				card.name.substring(0,View.cardLength/8),
 				center.x, center.y
 			);
+
+			// draw card cash
+			if (card.cardLocation === Model.CardLocation.structure) {
+				let cursor = card.shape.rect.lowerRight.clone();
+				cursor.move(-2,-2);
+				View.context.textAlign = 'right';
+				View.context.textBaseline = 'alphabetic';
+				View.context.fillStyle = View.colors.card.cash;
+				View.context.fillText(''+card.cash, cursor.x, cursor.y);
+			}
 
 			// draw the card's children
 			card.links.forEach((child, direction) => {
@@ -901,11 +923,9 @@ namespace Control {
 			Model.Model.initFactions(2);
 			Turn.initTurn(0);
 			
-			// starting uncontrolled cards
 			for (let i=0; i<4; ++i) {
 				let card = Model.Deck.drawGroup().cardLocation = Model.CardLocation.open;
 			}
-
 			View.View.init();
 
 			this.mouse = {
@@ -1105,6 +1125,7 @@ namespace Control {
 			Turn.factionShownIndex = factionIndex;
 			Turn.hasActed = [];
 			Turn.hasActedTwice = [];
+			Turn.faction.collectIncome();
 		}
 
 		static getHasActed(group: Model.Card): boolean {

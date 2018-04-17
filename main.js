@@ -133,6 +133,9 @@ var Model;
         };
         Model.getLinkTargets = function (movingCard, cardSet) {
             if (cardSet === void 0) { cardSet = Deck.structureCards; }
+            console.log('Model.getLinkTargets');
+            console.log('movingCard', movingCard);
+            console.log('cardSet', cardSet);
             var faction = movingCard.faction;
             var targets = [];
             for (var _i = 0, cardSet_2 = cardSet; _i < cardSet_2.length; _i++) {
@@ -153,6 +156,7 @@ var Model;
                     targets.push(new LinkTarget(card.shape.links[index], card, index));
                 }
             }
+            console.log('targets', targets);
             return targets;
         };
         Model.initFactions = function (quantity) {
@@ -956,11 +960,44 @@ var View;
             cmd1.data = data;
             cmd2.data = data;
             cmd3.data = data;
-            this.buttons.push(cmd1, cmd2, cmd3);
+            var done = new Button('done', PageAttack.btnDone, new Util.Point(10, 200));
+            done.visible = false;
+            this.buttons.push(cmd1, cmd2, cmd3, done);
         };
         PageAttack.reset = function () {
-            this.state = AttackState.setup;
+            PageAttack.state = AttackState.setup;
+            PageAttack.roll = 0;
+            for (var _i = 0, _a = PageAttack.buttons; _i < _a.length; _i++) {
+                var btn = _a[_i];
+                if (btn.caption === 'done') {
+                    btn.visible = false;
+                }
+                else {
+                    btn.visible = true;
+                }
+            }
         };
+        PageAttack.initDoneState = function () {
+            for (var _i = 0, _a = PageAttack.buttons; _i < _a.length; _i++) {
+                var btn = _a[_i];
+                if (btn.caption === 'done') {
+                    btn.visible = true;
+                }
+                else {
+                    btn.visible = false;
+                }
+            }
+        };
+        Object.defineProperty(PageAttack, "attackTotal", {
+            get: function () { return Control.Attack.attacker.attack; },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(PageAttack, "defenseTotal", {
+            get: function () { return Control.Attack.defender.defense; },
+            enumerable: true,
+            configurable: true
+        });
         PageAttack.draw = function (ctx) {
             var leftMargin = 10;
             var lineHeight = 15;
@@ -977,14 +1014,25 @@ var View;
             cursor.movey(lineHeight);
             var defLine = 'defender: ' + Control.Attack.defender.name + ' (' + Control.Attack.defender.defense + ')';
             ctx.fillText(defLine, cursor.x, cursor.y);
-            var totalAtk = Control.Attack.attacker.attack;
-            var totalDef = Control.Attack.defender.defense;
+            var totalAtk = PageAttack.attackTotal;
+            var totalDef = PageAttack.defenseTotal;
             cursor.movey(lineHeight * 2);
             ctx.fillText('total attack: ' + totalAtk, cursor.x, cursor.y);
             cursor.movey(lineHeight);
             ctx.fillText('total totalDef: ' + totalDef, cursor.x, cursor.y);
             cursor.movey(lineHeight);
             ctx.fillText('roll needed: ' + (totalAtk - totalDef) + ' or less', cursor.x, cursor.y);
+            cursor.movey(lineHeight * 2);
+            if (PageAttack.roll > 0) {
+                ctx.fillText('roll: ' + PageAttack.roll, cursor.x, cursor.y);
+                cursor.movey(lineHeight);
+                if (PageAttack.state === AttackState.success) {
+                    ctx.fillText('success!', cursor.x, cursor.y);
+                }
+                else {
+                    ctx.fillText('failure!', cursor.x, cursor.y);
+                }
+            }
             // buttons
             for (var _i = 0, _a = this.buttons; _i < _a.length; _i++) {
                 var btn = _a[_i];
@@ -1002,10 +1050,42 @@ var View;
             View.drawPage();
         };
         PageAttack.btnExecuteAttack = function (button) {
-            console.log('btnExecuteAttack');
+            // TODO: spend cash used in attack
+            Control.Turn.setHasActed(Control.Attack.attacker);
+            PageAttack.roll = Util.randomInt(1, 6) + Util.randomInt(1, 6);
+            // let needed = PageAttack.attackTotal - PageAttack.defenseTotal;
+            var needed = 12; // testing
+            if (PageAttack.roll < needed) {
+                PageAttack.state = AttackState.success;
+            }
+            else {
+                PageAttack.state = AttackState.failure;
+            }
+            PageAttack.initDoneState();
+            View.drawPage();
         };
         PageAttack.btnCancelAttack = function (button) {
-            console.log('btnCancelAttack');
+            Control.Control.cancelAttack();
+            View.screenState = State.table;
+            PageAttack.reset();
+            View.draw();
+        };
+        PageAttack.btnDone = function (button) {
+            View.screenState = State.table;
+            if (PageAttack.state === AttackState.failure) {
+                Control.Control.cancelAttack();
+            }
+            else if (PageAttack.attackType === 'control') {
+                Control.Control.controlSuccess();
+            }
+            else if (PageAttack.attackType === 'neutralize') {
+                Control.Control.neutralizeSuccess();
+            }
+            else if (PageAttack.attackType === 'destroy') {
+                Control.Control.destroySuccess();
+            }
+            PageAttack.reset();
+            View.draw();
         };
         // mouse event
         PageAttack.onMouseMove = function (mouse) {
@@ -1021,6 +1101,7 @@ var View;
         PageAttack.buttons = [];
         PageAttack.hoveredButton = null;
         PageAttack.attackType = 'control';
+        PageAttack.roll = 0;
         return PageAttack;
     }());
     View_1.PageAttack = PageAttack;
@@ -1051,17 +1132,43 @@ var Control;
                 last: null,
             };
         };
-        Control.beginChooseLink = function (cardSet) {
+        Control.beginChooseLink = function (cardToPlace, cardSet) {
             if (cardSet === void 0) { cardSet = Model.Deck.structureCards; }
             // TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
             View.View.screenState = View.State.chooseLink;
-            View.View.draw();
             this.linkTargets = Model.Model.getLinkTargets(View.View.hoveredCard, cardSet);
+            console.log('beginChooseLink');
+            console.log('cardToPlace', cardToPlace);
+            console.log('cardSet', cardSet);
+            console.log('linkTargets', this.linkTargets);
+            View.View.draw();
         };
         Control.beginChooseTarget = function () {
             View.View.screenState = View.State.table;
             View.View.canvas.style.cursor = 'crosshair';
             View.View.draw();
+        };
+        Control.cancelAttack = function () {
+            Attack.clear();
+            this.command = Command.none;
+        };
+        Control.restoreTableState = function () {
+            View.View.screenState = View.State.table;
+            Turn.factionShownIndex = Turn.factionIndex;
+            View.View.draw();
+        };
+        Control.controlSuccess = function () {
+            console.log('controlSuccess');
+            console.log('Attack.defender', Attack.defender);
+            Control.restoreTableState();
+            Attack.defender.faction = Attack.attacker.faction;
+            Control.beginChooseLink(Attack.defender, [Attack.attacker]);
+        };
+        Control.neutralizeSuccess = function () {
+            Control.restoreTableState();
+        };
+        Control.destroySuccess = function () {
+            Control.restoreTableState();
         };
         Control.onMouseDown = function (event) {
             this.mouse.down = true;
@@ -1131,12 +1238,6 @@ var Control;
             if (View.View.screenState === View.State.table) {
                 if (this.mouse.drag) { }
                 else if (View.View.hoveredButton) {
-                    // let command = View.View.hoveredButton.command;
-                    // let cmdAry = command.split(' ');
-                    // if (cmdAry[0] === 'faction') {
-                    // 	Turn.factionShownIndex = parseInt(cmdAry[1]);
-                    // 	View.View.draw();
-                    // }
                     View.View.hoveredButton.callback(View.View.hoveredButton);
                 }
                 else if (View.View.hoveredCard) {

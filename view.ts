@@ -2,15 +2,109 @@ namespace View {
 	export enum State {table, detail, choice, chooseLink, attackSetup};
 	export enum AttackState {setup, success, failure};
 
-	export class CardShape {
+	export class CardView {
 		static arrowSize = 0.1;
 		static cornerSize = 0.15;
-		static draw(card: Model.Card){
-			// orient called before draw
-			CardShape.drawBorder(card);
+		static colors = {
+			card: {
+				border: '#bbb',
+				link: '#444',
+				fill: '#f0f0f0',
+				text: 'gray',
+				hoveredBorder: '#f80',
+				cash: 'orange',
+			},
+			rootCard: {
+				fill: '#888',
+				link: '#fff',
+				text: 'white',
+			},
+		};
+
+		static draw(ctx: CanvasRenderingContext2D, card: Model.Card) {
+
+			// border
+			CardView.drawBorder(card);
+			if(card.cardType === Model.CardType.group){
+				ctx.fillStyle = CardView.colors.card.fill;
+			}
+			else{
+				ctx.fillStyle = CardView.colors.rootCard.fill;
+			}
+			ctx.strokeStyle = CardView.colors.card.border;
+			ctx.fill();
+			ctx.stroke();
+
+			// links
+			for (let index = 0; index < card.links.length; ++index){
+				let inward = false;
+				if (card.links[index] === 0){
+					if (index === 0) { inward = true; } else { continue; }
+				}
+				let apex = card.shape.links[index].clone();
+				let center = card.shape.rect.center;
+				CardView.drawLink(apex,center,inward);
+				if(card.cardType === Model.CardType.group){
+					View.context.fillStyle = CardView.colors.card.link;
+				} else{ View.context.fillStyle = CardView.colors.rootCard.link; }
+				View.context.fill();
+			}
+
+			// draw has-acted icon
+			if (View.turnObject.getHasActed(card)) {
+				let center = new Util.Point(card.shape.rect.lowerRight.x, card.shape.rect.upperLeft.y);
+				let radius = View.cardLength * CardView.arrowSize;
+				center.move(-radius, radius);
+				View.context.arc(center.x, center.y, radius-2, 0, Math.PI*2);
+				View.context.fillStyle =
+					card.cardType === Model.CardType.group
+					? CardView.colors.card.link
+					: CardView.colors.rootCard.link;
+				View.context.fill();
+			}
+
+			// draw card name
+			let center = card.shape.rect.center;
+			if(card.cardType === Model.CardType.group){
+				View.context.fillStyle = CardView.colors.card.text;
+			} else {
+				View.context.fillStyle = CardView.colors.rootCard.text;
+			}
+			View.context.font = View.font;
+			View.context.textAlign = 'center';
+			View.context.textBaseline = 'middle';
+			View.context.fillText(
+				card.name.substring(0,View.cardLength/8),
+				center.x, center.y
+			);
+
+			// draw card cash
+			if (card.cardLocation === Model.CardLocation.structure) {
+				let cursor = card.shape.rect.lowerRight.clone();
+				cursor.move(-2,-2);
+				View.context.textAlign = 'right';
+				View.context.textBaseline = 'alphabetic';
+				View.context.fillStyle = CardView.colors.card.cash;
+				View.context.fillText(''+card.cash, cursor.x, cursor.y);
+			}
+
+			// draw the card's children
+			card.links.forEach((child, direction) => {
+				if(typeof child !== 'number'){
+					let childDirection = (card.shape.rotation + direction + 2) % 4;
+					CardView.orient(child, card.shape.links[direction], childDirection);
+					CardView.draw(ctx, child);
+				}
+			});
+			
 		}
 		static drawBorder(card: Model.Card){
 			this.drawRoundRect(card.shape.rect, View.getArcSize());
+		}
+		static drawHovered(card: Model.Card, ctx: CanvasRenderingContext2D) {
+			CardView.drawBorder(card);
+			ctx.strokeStyle = CardView.colors.card.hoveredBorder;
+			ctx.stroke();
 		}
 		static drawRoundRect(rect: Util.Rectangle, cornerSize){
 			let deltax = new Util.Point(cornerSize, 0);
@@ -33,7 +127,7 @@ namespace View {
 		static drawLink(apex: Util.Point, center: Util.Point, inward: boolean){
 			let left = apex.clone();
 			let right = apex.clone();
-			let arrowSize = View.cardLength * CardShape.arrowSize;
+			let arrowSize = View.cardLength * CardView.arrowSize;
 			let toCenter = center.minus(apex).normal.times(arrowSize);
 			let toSide = toCenter.switched.dividedBy(2);
 			left.add(toSide);
@@ -127,7 +221,7 @@ namespace View {
 		draw (c: CanvasRenderingContext2D, hovered: boolean) {
 			if (!this.visible) { return; }
 			if (this.outline) {
-				CardShape.drawRoundRect(this.rect, 10);
+				CardView.drawRoundRect(this.rect, 10);
 
 				if (hovered) { View.context.fillStyle = Button.colors.hoveredFill; }
 				else if(this.selected) { View.context.fillStyle = Button.colors.selectedFill; }
@@ -169,19 +263,6 @@ namespace View {
 		static callback: (data:any) => any;
 		static turnObject: any;
 		static colors = {
-			card: {
-				border: '#bbb',
-				link: '#444',
-				fill: '#f0f0f0',
-				text: 'gray',
-				hoveredBorder: '#f80',
-				cash: 'orange',
-			},
-			rootCard: {
-				fill: '#888',
-				link: '#fff',
-				text: 'white',
-			},
 			screen: {
 				fill: '#f8f8f8',
 				headerFill: '#eee',
@@ -225,17 +306,19 @@ namespace View {
 
 			// structure
 			let faction = View.turnObject.factionShown;
-			CardShape.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
-			this.drawCard(faction.root);
-			
+			CardView.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
+			// View.drawCard(faction.root);
+			CardView.draw(View.context, faction.root);
+
 			// header: uncontrolled
 			View.context.fillStyle = View.colors.screen.headerFill;
 			View.context.fillRect(0,0, View.canvas.width, View.cardLength * 1.4);
 			let open = Model.Deck.openCards;
 			let cursor = new Util.Point(View.cardLength/2, 10);
 			for (let card of open) {
-				CardShape.orient(card, cursor, 1);
-				View.drawCard(card);
+				CardView.orient(card, cursor, 1);
+				// View.drawCard(card);
+				CardView.draw(View.context, card);
 				cursor.movex(View.cardLength);
 			}
 
@@ -252,10 +335,12 @@ namespace View {
 
 			// hovered
 			if(View.hoveredCard){
-				CardShape.drawBorder(View.hoveredCard);
-				View.context.strokeStyle = View.colors.card.hoveredBorder;
-				View.context.stroke();
+				// CardView.drawBorder(View.hoveredCard);
+				// View.context.strokeStyle = CardView.colors.card.hoveredBorder;
+				// View.context.stroke();
+				CardView.drawHovered(View.hoveredCard,View.context);
 			}
+
 		}
 		public static drawLinkChoice(closest){
 			View.draw();
@@ -277,7 +362,7 @@ namespace View {
 			let cursor = new Util.Point(gutter, gutter);
 			// name
 			View.context.font = View.boldFont;
-			View.context.fillStyle = View.colors.card.text;
+			View.context.fillStyle = CardView.colors.card.text; // TODO: make page object and keep own colors
 			View.context.textAlign = 'left';
 			View.context.textBaseline = 'alphabetic';
 			let cardName = card.name;
@@ -326,7 +411,7 @@ namespace View {
 				let hovered = (mouse && btn.rect.contains(mouse));
 				if (hovered) { View.hoveredButton = btn; }
 
-				CardShape.drawRoundRect(btn.rect, 10);
+				CardView.drawRoundRect(btn.rect, 10);
 				View.context.fillStyle = hovered ? Button.colors.hoveredFill : Button.colors.fill;
 				View.context.fill();
 				View.context.strokeStyle = Button.colors.border;
@@ -348,80 +433,7 @@ namespace View {
 			c.fillStyle = View.colors.screen.fill;
 			c.fillRect(0,0,w,h);
 		}
-		public static drawCard(card: Model.Card){
-			CardShape.drawBorder(card);
-			if(card.cardType === Model.CardType.group){
-				View.context.fillStyle = View.colors.card.fill;
-			}
-			else{
-				View.context.fillStyle = View.colors.rootCard.fill;
-			}
-			View.context.strokeStyle = View.colors.card.border;
-			View.context.fill();
-			View.context.stroke();
 
-			// draw the links
-			for (let index = 0; index < card.links.length; ++index){
-				let inward = false;
-				if (card.links[index] === 0){
-					if (index === 0) { inward = true; } else { continue; }
-				}
-				let apex = card.shape.links[index].clone();
-				let center = card.shape.rect.center;
-				CardShape.drawLink(apex,center,inward);
-				if(card.cardType === Model.CardType.group){
-					View.context.fillStyle = View.colors.card.link;
-				} else{ View.context.fillStyle = View.colors.rootCard.link; }
-				View.context.fill();
-			}
-
-			// draw has-acted icon
-			if (View.turnObject.getHasActed(card)) {
-				let center = new Util.Point(card.shape.rect.lowerRight.x, card.shape.rect.upperLeft.y);
-				let radius = View.cardLength * CardShape.arrowSize;
-				center.move(-radius, radius);
-				View.context.arc(center.x, center.y, radius-2, 0, Math.PI*2);
-				View.context.fillStyle =
-					card.cardType === Model.CardType.group
-					? View.colors.card.link
-					: View.colors.rootCard.link;
-				View.context.fill();
-			}
-
-			// draw card name
-			let center = card.shape.rect.center;
-			if(card.cardType === Model.CardType.group){
-				View.context.fillStyle = View.colors.card.text;
-			} else {
-				View.context.fillStyle = View.colors.rootCard.text;
-			}
-			View.context.font = View.font;
-			View.context.textAlign = 'center';
-			View.context.textBaseline = 'middle';
-			View.context.fillText(
-				card.name.substring(0,View.cardLength/8),
-				center.x, center.y
-			);
-
-			// draw card cash
-			if (card.cardLocation === Model.CardLocation.structure) {
-				let cursor = card.shape.rect.lowerRight.clone();
-				cursor.move(-2,-2);
-				View.context.textAlign = 'right';
-				View.context.textBaseline = 'alphabetic';
-				View.context.fillStyle = View.colors.card.cash;
-				View.context.fillText(''+card.cash, cursor.x, cursor.y);
-			}
-
-			// draw the card's children
-			card.links.forEach((child, direction) => {
-				if(typeof child !== 'number'){
-					let childDirection = (card.shape.rotation + direction + 2) % 4;
-					CardShape.orient(child, card.shape.links[direction], childDirection);
-					this.drawCard(child);
-				}
-			});
-		}
 		public static drawPage(){
 			View.clear();
 			if (View.screenState === State.attackSetup) { PageAttack.draw(View.context); }
@@ -435,7 +447,7 @@ namespace View {
 		public static orientRootCards(factions: Model.Faction[]) { // should be called only once
 			factions.forEach((faction, index) => {
 				faction.root.shape.rootPoint = new Util.Point(-View.cardLength/2, -View.cardLength/2);
-				CardShape.orient(faction.root, faction.root.shape.rootPoint, 0);
+				CardView.orient(faction.root, faction.root.shape.rootPoint, 0);
 			});
 		}
 		public static get font(): string {
@@ -476,12 +488,12 @@ namespace View {
 	}
 
 	export class PageAttack {
+		// TODO: store own colors
 		public static state: AttackState;
 		public static buttons: Button[] = [];
 		public static hoveredButton: Button = null;
 		public static attackType = 'control';
 		public static roll = 0;
-
 		public static attackObject: any;
 		public static attackCallback: (data:any) => void;
 
@@ -510,7 +522,6 @@ namespace View {
 			done.visible = false;
 			this.buttons.push(cmd1,cmd2,cmd3,done);
 		}
-
 		public static reset() {
 			PageAttack.state = AttackState.setup;
 			PageAttack.roll = 0;
@@ -525,10 +536,6 @@ namespace View {
 				else { btn.visible = false; }
 			}
 		}
-
-		public static get attackTotal() { return PageAttack.attackObject.attacker.attack; }
-		public static get defenseTotal() { return PageAttack.attackObject.defender.defense; }
-
 		public static draw (ctx: CanvasRenderingContext2D) {
 
 			console.log('PageAttack.draw',PageAttack.attackType);
@@ -548,7 +555,7 @@ namespace View {
 			// TODO: newly-controlled cards get their cash halved
 
 			let cursor = new Util.Point(leftMargin,lineHeight);
-			ctx.fillStyle = View.colors.card.text;
+			ctx.fillStyle = CardView.colors.card.text;
 			ctx.font = View.font;
 			ctx.textAlign = 'left';
 			ctx.textBaseline = 'alphabetic';
@@ -610,6 +617,10 @@ namespace View {
 				btn.draw(ctx, btn === this.hoveredButton);
 			}
 		}
+
+		// accessors
+		public static get attackTotal() { return PageAttack.attackObject.attacker.attack; }
+		public static get defenseTotal() { return PageAttack.attackObject.defender.defense; }
 
 		// button events
 		public static btnAtkType(button: View.Button) {
@@ -674,5 +685,7 @@ namespace View {
 		}
 		
 	}
+	export class PageTable {
 
+	}
 }

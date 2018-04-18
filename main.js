@@ -486,7 +486,7 @@ var Model;
     Model_1.Model = Model;
 })(Model || (Model = {}));
 var View;
-(function (View_1) {
+(function (View) {
     var State;
     (function (State) {
         State[State["table"] = 0] = "table";
@@ -494,8 +494,188 @@ var View;
         State[State["choice"] = 2] = "choice";
         State[State["chooseLink"] = 3] = "chooseLink";
         State[State["attackSetup"] = 4] = "attackSetup";
-    })(State = View_1.State || (View_1.State = {}));
+    })(State = View.State || (View.State = {}));
     ;
+    var AttackState;
+    (function (AttackState) {
+        AttackState[AttackState["setup"] = 0] = "setup";
+        AttackState[AttackState["success"] = 1] = "success";
+        AttackState[AttackState["failure"] = 2] = "failure";
+    })(AttackState = View.AttackState || (View.AttackState = {}));
+    ;
+    var CardShape = /** @class */ (function () {
+        function CardShape() {
+        }
+        CardShape.draw = function (card) {
+            // orient called before draw
+            CardShape.drawBorder(card);
+        };
+        CardShape.drawBorder = function (card) {
+            this.drawRoundRect(card.shape.rect, View.View.getArcSize());
+        };
+        CardShape.drawRoundRect = function (rect, cornerSize) {
+            var deltax = new Util.Point(cornerSize, 0);
+            var deltay = new Util.Point(0, cornerSize);
+            var corner = rect.upperLeft.clone();
+            View.View.beginPath();
+            View.View.moveTo(rect.upperLeft.plus(deltax));
+            corner.x = rect.lowerRight.x;
+            View.View.lineTo(corner.minus(deltax));
+            View.View.arcTo(corner, corner.plus(deltay));
+            View.View.lineTo(rect.lowerRight.minus(deltay));
+            View.View.arcTo(rect.lowerRight, rect.lowerRight.minus(deltax));
+            corner.copy(rect.upperLeft);
+            corner.y = rect.lowerRight.y;
+            View.View.lineTo(corner.plus(deltax));
+            View.View.arcTo(corner, corner.minus(deltay));
+            View.View.lineTo(rect.upperLeft.plus(deltay));
+            View.View.arcTo(rect.upperLeft, rect.upperLeft.plus(deltax));
+        };
+        CardShape.drawLink = function (apex, center, inward) {
+            var left = apex.clone();
+            var right = apex.clone();
+            var arrowSize = View.View.cardLength * CardShape.arrowSize;
+            var toCenter = center.minus(apex).normal.times(arrowSize);
+            var toSide = toCenter.switched.dividedBy(2);
+            left.add(toSide);
+            right.add(toSide.negative);
+            if (inward) {
+                apex.add(toCenter);
+            }
+            else {
+                left.add(toCenter);
+                right.add(toCenter);
+            }
+            View.View.beginPath();
+            View.View.moveTo(apex);
+            View.View.lineTo(left);
+            View.View.lineTo(right);
+            View.View.lineTo(apex);
+        };
+        CardShape.orient = function (card, stem, direction) {
+            // stem point already shifted by focus
+            // cardLength already determined from view
+            card.shape.stem.copy(stem);
+            card.shape.links[0].copy(stem);
+            card.shape.links[1].copy(stem);
+            card.shape.links[2].copy(stem);
+            card.shape.links[3].copy(stem);
+            card.shape.rotation = direction;
+            var cardWidth = View.View.cardLength * View.View.widthRatio;
+            var x, y, w, h;
+            if (direction === 0) {
+                w = View.View.cardLength;
+                h = cardWidth;
+                x = stem.x;
+                y = stem.y - h / 2;
+                card.shape.links[1].move(w / 2, -h / 2);
+                card.shape.links[2].movex(w);
+                card.shape.links[3].move(w / 2, h / 2);
+            }
+            else if (direction === 1) {
+                w = cardWidth;
+                h = View.View.cardLength;
+                x = stem.x - w / 2;
+                y = stem.y;
+                card.shape.links[1].move(w / 2, h / 2);
+                card.shape.links[2].movey(h);
+                card.shape.links[3].move(-w / 2, h / 2);
+            }
+            else if (direction === 2) {
+                w = View.View.cardLength;
+                h = cardWidth;
+                x = stem.x - w;
+                y = stem.y - h / 2;
+                card.shape.links[1].move(-w / 2, h / 2);
+                card.shape.links[2].movex(-w);
+                card.shape.links[3].move(-w / 2, -h / 2);
+            }
+            else if (direction === 3) {
+                w = cardWidth;
+                h = View.View.cardLength;
+                x = stem.x - w / 2;
+                y = stem.y - h;
+                card.shape.links[1].move(-w / 2, -h / 2);
+                card.shape.links[2].movey(-h);
+                card.shape.links[3].move(w / 2, -h / 2);
+            }
+            card.shape.rect.set(x, y, w, h);
+        };
+        CardShape.arrowSize = 0.1;
+        CardShape.cornerSize = 0.15;
+        return CardShape;
+    }());
+    View.CardShape = CardShape;
+    var Button = /** @class */ (function () {
+        function Button(caption, callback, ulCorner) {
+            this.caption = caption;
+            this.callback = callback;
+            this.ulCorner = ulCorner;
+            this.font = View.View.boldFont;
+            this.outline = true;
+            this.selected = false;
+            this.visible = true;
+            this.textAlign = 'center';
+            Button.size = new Util.Point(80, 18);
+            this.rect = new Util.Rectangle(ulCorner.x, ulCorner.y, Button.size.x, Button.size.y);
+            this.textPoint = this.rect.center;
+        }
+        Button.getHoveredButton = function (buttonSet, mouse) {
+            for (var _i = 0, buttonSet_1 = buttonSet; _i < buttonSet_1.length; _i++) {
+                var btn = buttonSet_1[_i];
+                if (btn.hovered(mouse)) {
+                    return btn;
+                }
+            }
+            return null;
+        };
+        Button.prototype.draw = function (c, hovered) {
+            if (!this.visible) {
+                return;
+            }
+            if (this.outline) {
+                CardShape.drawRoundRect(this.rect, 10);
+                if (hovered) {
+                    View.View.context.fillStyle = Button.colors.hoveredFill;
+                }
+                else if (this.selected) {
+                    View.View.context.fillStyle = Button.colors.selectedFill;
+                }
+                else {
+                    View.View.context.fillStyle = Button.colors.fill;
+                }
+                View.View.context.fill();
+                View.View.context.strokeStyle = Button.colors.border;
+                View.View.context.stroke();
+            }
+            View.View.context.font = this.font;
+            View.View.context.fillStyle = hovered ? Button.colors.hoveredText : Button.colors.text;
+            View.View.context.textAlign = this.textAlign;
+            View.View.context.textBaseline = 'middle';
+            View.View.context.fillText(this.caption, this.textPoint.x, this.textPoint.y);
+        };
+        Button.prototype.hovered = function (mouse) {
+            return this.rect.contains(mouse);
+        };
+        Button.prototype.moveTo = function (point) {
+            var dims = this.rect.lowerRight.minus(this.rect.upperLeft);
+            this.rect.upperLeft.copy(point);
+            this.rect.lowerRight.copy(point.plus(dims));
+        };
+        Button.colors = {
+            fill: '#efefef',
+            border: '#ccc',
+            text: 'gray',
+            hoveredFill: 'gray',
+            hoveredText: 'orange',
+            selectedFill: '#ccf',
+        };
+        return Button;
+    }());
+    View.Button = Button;
+})(View || (View = {}));
+var View;
+(function (View_1) {
     var View = /** @class */ (function () {
         function View() {
         }
@@ -504,15 +684,15 @@ var View;
             View.context = View.canvas.getContext('2d');
             View.focus = new Util.Point(View.canvas.width / 2, View.canvas.height / 2);
             View.detailButtons = [
-                new Button('move', Control.Control.btnMoveGroup, new Util.Point(20, 100)),
-                new Button('attack', Control.Control.btnAttack, new Util.Point(100, 100)),
+                new View_1.Button('move', Control.Control.btnMoveGroup, new Util.Point(20, 100)),
+                new View_1.Button('attack', Control.Control.btnAttack, new Util.Point(100, 100)),
             ];
             // faction selection buttons
             View.factionButtons = [];
             var cursor = new Util.Point(10, View.canvas.height - 10);
             for (var i = Model.Model.factions.length - 1; i >= 0; --i) {
                 var faction = Model.Model.factions[i];
-                var btn = new Button(faction.root.name, Control.Control.btnShowFaction, cursor.clone());
+                var btn = new View_1.Button(faction.root.name, Control.Control.btnShowFaction, cursor.clone());
                 btn.data = faction;
                 btn.outline = false;
                 btn.textPoint = cursor.clone();
@@ -532,7 +712,7 @@ var View;
             this.clear();
             // structure
             var faction = Control.Turn.factionShown;
-            CardShape.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
+            View_1.CardShape.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
             this.drawCard(faction.root);
             // header: uncontrolled
             View.context.fillStyle = View.colors.screen.headerFill;
@@ -541,7 +721,7 @@ var View;
             var cursor = new Util.Point(View.cardLength / 2, 10);
             for (var _i = 0, open_1 = open; _i < open_1.length; _i++) {
                 var card = open_1[_i];
-                CardShape.orient(card, cursor, 1);
+                View_1.CardShape.orient(card, cursor, 1);
                 View.drawCard(card);
                 cursor.movex(View.cardLength);
             }
@@ -562,7 +742,7 @@ var View;
             }
             // hovered
             if (View.hoveredCard) {
-                CardShape.drawBorder(View.hoveredCard);
+                View_1.CardShape.drawBorder(View.hoveredCard);
                 View.context.strokeStyle = View.colors.card.hoveredBorder;
                 View.context.stroke();
             }
@@ -649,18 +829,18 @@ var View;
                 if (hovered) {
                     View.hoveredButton = btn;
                 }
-                CardShape.drawRoundRect(btn.rect, 10);
-                View.context.fillStyle = hovered ? Button.colors.hoveredFill : Button.colors.fill;
+                View_1.CardShape.drawRoundRect(btn.rect, 10);
+                View.context.fillStyle = hovered ? View_1.Button.colors.hoveredFill : View_1.Button.colors.fill;
                 View.context.fill();
-                View.context.strokeStyle = Button.colors.border;
+                View.context.strokeStyle = View_1.Button.colors.border;
                 View.context.stroke();
                 View.context.font = View.boldFont;
-                View.context.fillStyle = hovered ? Button.colors.hoveredText : Button.colors.text;
+                View.context.fillStyle = hovered ? View_1.Button.colors.hoveredText : View_1.Button.colors.text;
                 View.context.textAlign = 'center';
                 View.context.textBaseline = 'middle';
                 var center = btn.rect.center;
                 View.context.fillText(btn.caption, center.x, center.y);
-                cursor.movex(Button.size.x + gutter);
+                cursor.movex(View_1.Button.size.x + gutter);
             }
         };
         View.clear = function () {
@@ -672,7 +852,7 @@ var View;
         };
         View.drawCard = function (card) {
             var _this = this;
-            CardShape.drawBorder(card);
+            View_1.CardShape.drawBorder(card);
             if (card.cardType === Model.CardType.group) {
                 View.context.fillStyle = View.colors.card.fill;
             }
@@ -695,7 +875,7 @@ var View;
                 }
                 var apex = card.shape.links[index].clone();
                 var center_1 = card.shape.rect.center;
-                CardShape.drawLink(apex, center_1, inward);
+                View_1.CardShape.drawLink(apex, center_1, inward);
                 if (card.cardType === Model.CardType.group) {
                     View.context.fillStyle = View.colors.card.link;
                 }
@@ -707,7 +887,7 @@ var View;
             // draw has-acted icon
             if (Control.Turn.getHasActed(card)) {
                 var center_2 = new Util.Point(card.shape.rect.lowerRight.x, card.shape.rect.upperLeft.y);
-                var radius = View.cardLength * CardShape.arrowSize;
+                var radius = View.cardLength * View_1.CardShape.arrowSize;
                 center_2.move(-radius, radius);
                 View.context.arc(center_2.x, center_2.y, radius - 2, 0, Math.PI * 2);
                 View.context.fillStyle =
@@ -741,14 +921,14 @@ var View;
             card.links.forEach(function (child, direction) {
                 if (typeof child !== 'number') {
                     var childDirection = (card.shape.rotation + direction + 2) % 4;
-                    CardShape.orient(child, card.shape.links[direction], childDirection);
+                    View_1.CardShape.orient(child, card.shape.links[direction], childDirection);
                     _this.drawCard(child);
                 }
             });
         };
         View.drawPage = function () {
             View.clear();
-            if (View.screenState === State.attackSetup) {
+            if (View.screenState === View_1.State.attackSetup) {
                 PageAttack.draw(View.context);
             }
         };
@@ -765,7 +945,7 @@ var View;
         View.orientRootCards = function (factions) {
             factions.forEach(function (faction, index) {
                 faction.root.shape.rootPoint = new Util.Point(-View.cardLength / 2, -View.cardLength / 2);
-                CardShape.orient(faction.root, faction.root.shape.rootPoint, 0);
+                View_1.CardShape.orient(faction.root, faction.root.shape.rootPoint, 0);
             });
         };
         Object.defineProperty(View, "font", {
@@ -784,12 +964,12 @@ var View;
         });
         // page events
         View.onMouseMove = function (mouse) {
-            if (this.screenState === State.attackSetup) {
+            if (this.screenState === View_1.State.attackSetup) {
                 PageAttack.onMouseMove(mouse);
             }
         };
         View.onMouseClick = function (mouse) {
-            if (this.screenState === State.attackSetup) {
+            if (this.screenState === View_1.State.attackSetup) {
                 PageAttack.onMouseClick(mouse);
             }
         };
@@ -810,7 +990,7 @@ var View;
         View.getArcSize = function () {
             return this.arcRadius * this.cardLength;
         };
-        View.screenState = State.table;
+        View.screenState = View_1.State.table;
         View.arcRadius = 0.15;
         View.widthRatio = 0.7;
         View.cardLength = 50; // changes with zoom
@@ -839,182 +1019,6 @@ var View;
         return View;
     }());
     View_1.View = View;
-    var CardShape = /** @class */ (function () {
-        function CardShape() {
-        }
-        CardShape.draw = function (card) {
-            // orient called before draw
-            CardShape.drawBorder(card);
-        };
-        CardShape.drawBorder = function (card) {
-            this.drawRoundRect(card.shape.rect, View.getArcSize());
-        };
-        CardShape.drawRoundRect = function (rect, cornerSize) {
-            var deltax = new Util.Point(cornerSize, 0);
-            var deltay = new Util.Point(0, cornerSize);
-            var corner = rect.upperLeft.clone();
-            View.beginPath();
-            View.moveTo(rect.upperLeft.plus(deltax));
-            corner.x = rect.lowerRight.x;
-            View.lineTo(corner.minus(deltax));
-            View.arcTo(corner, corner.plus(deltay));
-            View.lineTo(rect.lowerRight.minus(deltay));
-            View.arcTo(rect.lowerRight, rect.lowerRight.minus(deltax));
-            corner.copy(rect.upperLeft);
-            corner.y = rect.lowerRight.y;
-            View.lineTo(corner.plus(deltax));
-            View.arcTo(corner, corner.minus(deltay));
-            View.lineTo(rect.upperLeft.plus(deltay));
-            View.arcTo(rect.upperLeft, rect.upperLeft.plus(deltax));
-        };
-        CardShape.drawLink = function (apex, center, inward) {
-            var left = apex.clone();
-            var right = apex.clone();
-            var arrowSize = View.cardLength * CardShape.arrowSize;
-            var toCenter = center.minus(apex).normal.times(arrowSize);
-            var toSide = toCenter.switched.dividedBy(2);
-            left.add(toSide);
-            right.add(toSide.negative);
-            if (inward) {
-                apex.add(toCenter);
-            }
-            else {
-                left.add(toCenter);
-                right.add(toCenter);
-            }
-            View.beginPath();
-            View.moveTo(apex);
-            View.lineTo(left);
-            View.lineTo(right);
-            View.lineTo(apex);
-        };
-        CardShape.orient = function (card, stem, direction) {
-            // stem point already shifted by focus
-            // cardLength already determined from view
-            card.shape.stem.copy(stem);
-            card.shape.links[0].copy(stem);
-            card.shape.links[1].copy(stem);
-            card.shape.links[2].copy(stem);
-            card.shape.links[3].copy(stem);
-            card.shape.rotation = direction;
-            var cardWidth = View.cardLength * View.widthRatio;
-            var x, y, w, h;
-            if (direction === 0) {
-                w = View.cardLength;
-                h = cardWidth;
-                x = stem.x;
-                y = stem.y - h / 2;
-                card.shape.links[1].move(w / 2, -h / 2);
-                card.shape.links[2].movex(w);
-                card.shape.links[3].move(w / 2, h / 2);
-            }
-            else if (direction === 1) {
-                w = cardWidth;
-                h = View.cardLength;
-                x = stem.x - w / 2;
-                y = stem.y;
-                card.shape.links[1].move(w / 2, h / 2);
-                card.shape.links[2].movey(h);
-                card.shape.links[3].move(-w / 2, h / 2);
-            }
-            else if (direction === 2) {
-                w = View.cardLength;
-                h = cardWidth;
-                x = stem.x - w;
-                y = stem.y - h / 2;
-                card.shape.links[1].move(-w / 2, h / 2);
-                card.shape.links[2].movex(-w);
-                card.shape.links[3].move(-w / 2, -h / 2);
-            }
-            else if (direction === 3) {
-                w = cardWidth;
-                h = View.cardLength;
-                x = stem.x - w / 2;
-                y = stem.y - h;
-                card.shape.links[1].move(-w / 2, -h / 2);
-                card.shape.links[2].movey(-h);
-                card.shape.links[3].move(w / 2, -h / 2);
-            }
-            card.shape.rect.set(x, y, w, h);
-        };
-        CardShape.arrowSize = 0.1;
-        CardShape.cornerSize = 0.15;
-        return CardShape;
-    }());
-    var Button = /** @class */ (function () {
-        function Button(caption, callback, ulCorner) {
-            this.caption = caption;
-            this.callback = callback;
-            this.ulCorner = ulCorner;
-            this.font = View.boldFont;
-            this.outline = true;
-            this.selected = false;
-            this.visible = true;
-            this.textAlign = 'center';
-            this.rect = new Util.Rectangle(ulCorner.x, ulCorner.y, Button.size.x, Button.size.y);
-            this.textPoint = this.rect.center;
-        }
-        Button.getHoveredButton = function (buttonSet, mouse) {
-            for (var _i = 0, buttonSet_1 = buttonSet; _i < buttonSet_1.length; _i++) {
-                var btn = buttonSet_1[_i];
-                if (btn.hovered(mouse)) {
-                    return btn;
-                }
-            }
-            return null;
-        };
-        Button.prototype.draw = function (c, hovered) {
-            if (!this.visible) {
-                return;
-            }
-            if (this.outline) {
-                CardShape.drawRoundRect(this.rect, 10);
-                if (hovered) {
-                    View.context.fillStyle = Button.colors.hoveredFill;
-                }
-                else if (this.selected) {
-                    View.context.fillStyle = Button.colors.selectedFill;
-                }
-                else {
-                    View.context.fillStyle = Button.colors.fill;
-                }
-                View.context.fill();
-                View.context.strokeStyle = Button.colors.border;
-                View.context.stroke();
-            }
-            View.context.font = this.font;
-            View.context.fillStyle = hovered ? Button.colors.hoveredText : Button.colors.text;
-            View.context.textAlign = this.textAlign;
-            View.context.textBaseline = 'middle';
-            View.context.fillText(this.caption, this.textPoint.x, this.textPoint.y);
-        };
-        Button.prototype.hovered = function (mouse) {
-            return this.rect.contains(mouse);
-        };
-        Button.prototype.moveTo = function (point) {
-            var dims = this.rect.lowerRight.minus(this.rect.upperLeft);
-            this.rect.upperLeft.copy(point);
-            this.rect.lowerRight.copy(point.plus(dims));
-        };
-        Button.size = new Util.Point(80, 18);
-        Button.colors = {
-            fill: '#efefef',
-            border: '#ccc',
-            text: 'gray',
-            hoveredFill: 'gray',
-            hoveredText: 'orange',
-            selectedFill: '#ccf',
-        };
-        return Button;
-    }());
-    View_1.Button = Button;
-    var AttackState;
-    (function (AttackState) {
-        AttackState[AttackState["setup"] = 0] = "setup";
-        AttackState[AttackState["success"] = 1] = "success";
-        AttackState[AttackState["failure"] = 2] = "failure";
-    })(AttackState || (AttackState = {}));
-    ;
     var PageAttack = /** @class */ (function () {
         function PageAttack() {
         }
@@ -1022,26 +1026,26 @@ var View;
             this.reset();
             var lineHeight = 22;
             var cursor = new Util.Point(10, 150);
-            this.buttons.push(new Button('execute', this.btnExecuteAttack, cursor));
+            this.buttons.push(new View_1.Button('execute', this.btnExecuteAttack, cursor));
             cursor.movey(lineHeight);
-            this.buttons.push(new Button('cancel', this.btnCancelAttack, cursor));
-            cursor.set(View.canvas.width - Button.size.x - 10, 10);
-            var cmd1 = new Button('control', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
+            this.buttons.push(new View_1.Button('cancel', this.btnCancelAttack, cursor));
+            cursor.set(View.canvas.width - View_1.Button.size.x - 10, 10);
+            var cmd1 = new View_1.Button('control', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
             cursor.movey(lineHeight);
-            var cmd2 = new Button('neutralize', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
+            var cmd2 = new View_1.Button('neutralize', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
             cursor.movey(lineHeight);
-            var cmd3 = new Button('destroy', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
+            var cmd3 = new View_1.Button('destroy', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
             cmd1.selected = true;
             var data = { group: [cmd1, cmd2, cmd3] };
             cmd1.data = data;
             cmd2.data = data;
             cmd3.data = data;
-            var done = new Button('done', PageAttack.btnDone, new Util.Point(10, 200));
+            var done = new View_1.Button('done', PageAttack.btnDone, new Util.Point(10, 200));
             done.visible = false;
             this.buttons.push(cmd1, cmd2, cmd3, done);
         };
         PageAttack.reset = function () {
-            PageAttack.state = AttackState.setup;
+            PageAttack.state = View_1.AttackState.setup;
             PageAttack.roll = 0;
             for (var _i = 0, _a = PageAttack.buttons; _i < _a.length; _i++) {
                 var btn = _a[_i];
@@ -1133,7 +1137,7 @@ var View;
             if (PageAttack.roll > 0) {
                 ctx.fillText('roll: ' + PageAttack.roll, cursor.x, cursor.y);
                 cursor.movey(lineHeight);
-                if (PageAttack.state === AttackState.success) {
+                if (PageAttack.state === View_1.AttackState.success) {
                     ctx.fillText('success!', cursor.x, cursor.y);
                 }
                 else {
@@ -1165,23 +1169,23 @@ var View;
             // let needed = PageAttack.attackTotal - PageAttack.defenseTotal;
             var needed = 12; // testing
             if (PageAttack.roll < needed) {
-                PageAttack.state = AttackState.success;
+                PageAttack.state = View_1.AttackState.success;
             }
             else {
-                PageAttack.state = AttackState.failure;
+                PageAttack.state = View_1.AttackState.failure;
             }
             PageAttack.initDoneState();
             View.drawPage();
         };
         PageAttack.btnCancelAttack = function (button) {
             Control.Control.cancelAttack();
-            View.screenState = State.table;
+            View.screenState = View_1.State.table;
             PageAttack.reset();
             View.draw();
         };
         PageAttack.btnDone = function (button) {
-            View.screenState = State.table;
-            if (PageAttack.state === AttackState.failure) {
+            View.screenState = View_1.State.table;
+            if (PageAttack.state === View_1.AttackState.failure) {
                 Control.Control.cancelAttack();
             }
             else if (PageAttack.attackType === 'control') {
@@ -1199,7 +1203,7 @@ var View;
         // mouse event
         PageAttack.onMouseMove = function (mouse) {
             var buttonSet = this.buttons.filter(function (btn) { return btn.visible === true; });
-            this.hoveredButton = Button.getHoveredButton(buttonSet, mouse);
+            this.hoveredButton = View_1.Button.getHoveredButton(buttonSet, mouse);
             View.drawPage();
         };
         PageAttack.onMouseClick = function (mouse) {

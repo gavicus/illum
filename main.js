@@ -143,88 +143,6 @@ var Model;
         Align[Align["fanatic"] = 9] = "fanatic";
     })(Align = Model_1.Align || (Model_1.Align = {}));
     ;
-    var Model = /** @class */ (function () {
-        function Model() {
-        }
-        Model.getHoveredCard = function (mouse, cardSet) {
-            if (cardSet === void 0) { cardSet = Deck.tableCards; }
-            for (var _i = 0, cardSet_1 = cardSet; _i < cardSet_1.length; _i++) {
-                var card = cardSet_1[_i];
-                if (card.shape.rect.contains(mouse)) {
-                    return card;
-                }
-            }
-            return null;
-        };
-        Model.newCard = function (faction, name, links) {
-            var card = new Card(name, links);
-            card.faction = faction;
-            return card;
-        };
-        Model.getLinkTargets = function (movingCard, cardSet) {
-            if (cardSet === void 0) { cardSet = Deck.structureCards; }
-            console.log('Model.getLinkTargets');
-            console.log('movingCard', movingCard);
-            console.log('cardSet', cardSet);
-            var faction = movingCard.faction;
-            var targets = [];
-            for (var _i = 0, cardSet_2 = cardSet; _i < cardSet_2.length; _i++) {
-                var card = cardSet_2[_i];
-                if (card.faction !== faction) {
-                    continue;
-                }
-                if (card === movingCard) {
-                    continue;
-                }
-                if (card.isDescendantOf(movingCard)) {
-                    continue;
-                }
-                for (var index = 0; index < card.links.length; ++index) {
-                    if (card.links[index] !== 1) {
-                        continue;
-                    }
-                    targets.push(new LinkTarget(card.shape.links[index], card, index));
-                }
-            }
-            console.log('targets', targets);
-            return targets;
-        };
-        Model.initFactions = function (quantity) {
-            for (var i = 0; i < quantity; ++i) {
-                Model.factions.push(new Faction());
-            }
-        };
-        Model.factions = [];
-        return Model;
-    }());
-    Model_1.Model = Model;
-    var LinkTarget = /** @class */ (function () {
-        function LinkTarget(point, card, linkIndex) {
-            this.point = point;
-            this.card = card;
-            this.linkIndex = linkIndex;
-        }
-        return LinkTarget;
-    }());
-    Model_1.LinkTarget = LinkTarget;
-    var Faction = /** @class */ (function () {
-        function Faction() {
-            this.root = Deck.drawRoot();
-            this.root.faction = this;
-            // this.root = Model.newCard(this, 'root', 4);
-            // let child = Model.newCard(this, 'child', 3);
-            // this.root.addCard(child, 2);
-            // let grand = Model.newCard(this, 'grand1', 1);
-            // child.addCard(grand,2);
-            // let grand2 = Model.newCard(this, 'grand2', 2);
-            // child.addCard(grand2,3);
-        }
-        Faction.prototype.collectIncome = function () {
-            this.root.collectIncome();
-        };
-        return Faction;
-    }());
-    Model_1.Faction = Faction;
     var Alignment = /** @class */ (function () {
         function Alignment() {
         }
@@ -277,6 +195,24 @@ var Model;
         return Alignment;
     }());
     Model_1.Alignment = Alignment;
+    var Faction = /** @class */ (function () {
+        function Faction() {
+            this.root = Deck.drawRoot();
+            this.root.faction = this;
+            // this.root = Model.newCard(this, 'root', 4);
+            // let child = Model.newCard(this, 'child', 3);
+            // this.root.addCard(child, 2);
+            // let grand = Model.newCard(this, 'grand1', 1);
+            // child.addCard(grand,2);
+            // let grand2 = Model.newCard(this, 'grand2', 2);
+            // child.addCard(grand2,3);
+        }
+        Faction.prototype.collectIncome = function () {
+            this.root.collectIncome();
+        };
+        return Faction;
+    }());
+    Model_1.Faction = Faction;
     var Card = /** @class */ (function () {
         function Card(name, links) {
             if (links === void 0) { links = 4; }
@@ -484,6 +420,70 @@ var Model;
         return Deck;
     }());
     Model_1.Deck = Deck;
+    var LinkTarget = /** @class */ (function () {
+        function LinkTarget(point, card, linkIndex) {
+            this.point = point;
+            this.card = card;
+            this.linkIndex = linkIndex;
+        }
+        return LinkTarget;
+    }());
+    Model_1.LinkTarget = LinkTarget;
+    var Model = /** @class */ (function () {
+        function Model() {
+        }
+        Model.getHoveredCard = function (mouse, cardSet) {
+            if (cardSet === void 0) { cardSet = Deck.tableCards; }
+            for (var _i = 0, cardSet_1 = cardSet; _i < cardSet_1.length; _i++) {
+                var card = cardSet_1[_i];
+                if (card.shape.rect.contains(mouse)) {
+                    return card;
+                }
+            }
+            return null;
+        };
+        Model.newCard = function (faction, name, links) {
+            var card = new Card(name, links);
+            card.faction = faction;
+            return card;
+        };
+        Model.getLinkTargets = function (movingCard, cardSet) {
+            if (cardSet === void 0) { cardSet = Deck.structureCards; }
+            console.log('Model.getLinkTargets');
+            console.log('movingCard', movingCard);
+            console.log('cardSet', cardSet);
+            var faction = movingCard.faction;
+            var targets = [];
+            for (var _i = 0, cardSet_2 = cardSet; _i < cardSet_2.length; _i++) {
+                var card = cardSet_2[_i];
+                if (card.faction !== faction) {
+                    continue;
+                }
+                if (card === movingCard) {
+                    continue;
+                }
+                if (card.isDescendantOf(movingCard)) {
+                    continue;
+                }
+                for (var index = 0; index < card.links.length; ++index) {
+                    if (card.links[index] !== 1) {
+                        continue;
+                    }
+                    targets.push(new LinkTarget(card.shape.links[index], card, index));
+                }
+            }
+            console.log('targets', targets);
+            return targets;
+        };
+        Model.initFactions = function (quantity) {
+            for (var i = 0; i < quantity; ++i) {
+                Model.factions.push(new Faction());
+            }
+        };
+        Model.factions = [];
+        return Model;
+    }());
+    Model_1.Model = Model;
 })(Model || (Model = {}));
 var View;
 (function (View_1) {

@@ -5,12 +5,7 @@ namespace Util {
 	}
 
 	export class Point {
-		x: number;
-		y: number;
-		constructor(px=0, py=0){
-			this.x = px;
-			this.y = py;
-		}
+		constructor(public x: number = 0, public y: number = 0){}
 		add(p: Point){
 			this.move(p.x, p.y);
 		}

@@ -5,11 +5,11 @@ var Util;
     }
     Util.randomInt = randomInt;
     var Point = /** @class */ (function () {
-        function Point(px, py) {
-            if (px === void 0) { px = 0; }
-            if (py === void 0) { py = 0; }
-            this.x = px;
-            this.y = py;
+        function Point(x, y) {
+            if (x === void 0) { x = 0; }
+            if (y === void 0) { y = 0; }
+            this.x = x;
+            this.y = y;
         }
         Point.prototype.add = function (p) {
             this.move(p.x, p.y);
@@ -1086,6 +1086,7 @@ var View;
             // TODO: allow use of cash
             // TODO: disallow control attacks if attacker has no open out links
             // TODO: figure in card special abilities
+            // TODO: newly-controlled cards get their cash halved
             var cursor = new Util.Point(leftMargin, lineHeight);
             ctx.fillStyle = View.colors.card.text;
             ctx.font = View.font;

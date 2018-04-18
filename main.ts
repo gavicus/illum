@@ -94,6 +94,10 @@ namespace Util {
 }
 
 namespace Model {
+	export enum CardLocation {deck,hand,open,structure,discard};
+	export enum CardType {root,group,special};
+	export enum Align {government,communist,liberal,conservative,peaceful,violent,straight,weird,criminal,fanatic};
+
 	export class Model {
 		public static factions: Faction[] = [];
 
@@ -160,8 +164,45 @@ namespace Model {
 		}
 	}
 
-	export enum CardLocation {deck,hand,open,structure,discard};
-	export enum CardType {root,group,special};
+	export class Alignment {
+		static data = [];
+		public static init() {
+			Alignment.data[Align.government] = {name:'Government',opp:Align.communist};
+			Alignment.data[Align.communist] = {name:'Communist',opp:Align.government};
+			Alignment.data[Align.liberal] = {name:'Liberal',opp:Align.conservative};
+			Alignment.data[Align.conservative] = {name:'Conservative',opp:Align.liberal};
+			Alignment.data[Align.peaceful] = {name:'Peaceful',opp:Align.violent};
+			Alignment.data[Align.violent] = {name:'Violent',opp:Align.peaceful};
+			Alignment.data[Align.straight] = {name:'Straight',opp:Align.weird};
+			Alignment.data[Align.weird] = {name:'Weird',opp:Align.straight};
+			Alignment.data[Align.criminal] = {name:'Criminal',opp:null};
+			Alignment.data[Align.fanatic] = {name:'Fanatic',opp:Align.fanatic};
+		}
+		public static getIndex(name: string) {
+			for (let i=0; i < Alignment.data.length; ++i) {
+				if(Alignment.data[i].name.toLowerCase() === name.toLowerCase()) { return i; }
+			}
+		}
+		public static getName(index: Align) {
+			return Alignment.data[index];
+		}
+		public static getOpposite(index: Align) {
+			return Alignment.data[index].opp;
+		}
+		public static compare(first: string[], second: string[]): any {
+			let result = {same:0, opposite:0};
+			if (!first) return result;
+			for (let fa of first) {
+				for (let sa of second) {
+					let fi = this.getIndex(fa);
+					let si = this.getIndex(sa);
+					if (this.data[fi].opp === si) { result.opposite++; }
+					else if (fi === si) { result.same++; }
+				}
+			}
+			return result;
+		}
+	}
 
 	export class Card {
 		// TODO: alignments
@@ -178,6 +219,7 @@ namespace Model {
 		cash = 0;
 		description: string;
 		objective: string;
+		alignments: string[];
 		cardLocation: CardLocation;
 		cardType: CardType;
 
@@ -269,7 +311,8 @@ namespace Model {
 				card.cardType = CardType.root;
 			}
 			else if (type === 'group'){
-				// card.alignments = alignments;
+				if (alignments.length > 0) { card.alignments = alignments.split(','); }
+				else { card.alignments = []; }
 				card.cardType = CardType.group;
 			}
 			else {
@@ -465,7 +508,12 @@ namespace View {
 			View.context.strokeStyle = 'red';
 			View.context.stroke();
 		}
-		public static drawDetail(card: Model.Card, mouse: Util.Point = null){
+		public static drawDetail(card: Model.Card, mouse: Util.Point = null) {
+
+			// TODO:
+			// long description lines must wrap (see IRS)
+			// IRS income shows as NaN -- make exceptions for special cases
+
 			View.clear();
 			let gutter = 20;
 			let lineHeight = 16;
@@ -480,6 +528,9 @@ namespace View {
 				cardName = 'The ' + card.name;
 			}
 			View.context.fillText(cardName, cursor.x, cursor.y);
+			cursor.movey(lineHeight);
+			View.context.fillText('(' + card.alignments + ')', cursor.x, cursor.y);
+			
 			// numbers
 			cursor.movey(lineHeight);
 			View.context.font = View.font;
@@ -868,31 +919,68 @@ namespace View {
 		public static get defenseTotal() { return Control.Attack.defender.defense; }
 
 		public static draw (ctx: CanvasRenderingContext2D) {
+
+			console.log('PageAttack.draw',PageAttack.attackType);
+
 			let leftMargin = 10;
 			let lineHeight = 15;
+
+			let defenseAttribute = Control.Attack.defender.defense;
+			if(PageAttack.attackType === 'destroy') {
+				defenseAttribute = Control.Attack.defender.attack;
+			}
+
+			// TODO: compute target proximity to root card
+			// TODO: allow use of cash
+			// TODO: disallow control attacks if attacker has no open out links
+			// TODO: figure in card special abilities
+			// TODO: newly-controlled cards get their cash halved
+
 			let cursor = new Util.Point(leftMargin,lineHeight);
 			ctx.fillStyle = View.colors.card.text;
 			ctx.font = View.font;
 			ctx.textAlign = 'left';
 			ctx.textBaseline = 'alphabetic';
-			let typeLine = 'attack type: ' + this.attackType;
+			let typeLine = 'attack type: ' + PageAttack.attackType;
 			ctx.fillText(typeLine, cursor.x, cursor.y);
 			cursor.movey(lineHeight);
 			let atkLine = 'attacker: '+Control.Attack.attacker.name + ' (' + Control.Attack.attacker.attack + ')';
+			atkLine += ' (' + Control.Attack.attacker.alignments + ')';
 			ctx.fillText(atkLine, cursor.x, cursor.y);
 			cursor.movey(lineHeight);
-			let defLine = 'defender: '+Control.Attack.defender.name + ' (' + Control.Attack.defender.defense + ')';
+			let defLine = 'defender: '+ Control.Attack.defender.name + ' (' + defenseAttribute + ')';
+			defLine += ' (' + Control.Attack.defender.alignments + ')';
 			ctx.fillText(defLine, cursor.x, cursor.y);
 
-			let totalAtk = PageAttack.attackTotal;
-			let totalDef = PageAttack.defenseTotal;
+			// compute totals
+			let comparison = Model.Alignment.compare(Control.Attack.attacker.alignments, Control.Attack.defender.alignments);
+			let alignBonus = 0;
+			if(PageAttack.attackType === 'control') {
+				alignBonus = comparison.same * 4 - comparison.opposite * 4;
+			}
+			else if(PageAttack.attackType === 'neutralize') {
+				alignBonus = 6 + comparison.same * 4 - comparison.opposite * 4;
+			}
+			else if(PageAttack.attackType === 'destroy') {
+				alignBonus = comparison.opposite * 4 - comparison.same * 4;
+			}
+			let totalAtk = Control.Attack.attacker.attack + alignBonus;
+			let totalDef = defenseAttribute;
 
+			// show totals
 			cursor.movey(lineHeight*2);
+			let cursor2 = cursor.clone();
 			ctx.fillText('total attack: '+totalAtk, cursor.x, cursor.y);
 			cursor.movey(lineHeight);
-			ctx.fillText('total totalDef: '+totalDef, cursor.x, cursor.y);
+			ctx.fillText('total defense: '+totalDef, cursor.x, cursor.y);
 			cursor.movey(lineHeight);
 			ctx.fillText('roll needed: '+ (totalAtk - totalDef) + ' or less', cursor.x, cursor.y);
+
+			// show bonuses
+			cursor2.movex(120);
+			ctx.fillText('alignment bonus: ' + alignBonus, cursor2.x, cursor2.y);
+			cursor2.movey(lineHeight);
+			ctx.fillText('illuminati defense: ' + 0, cursor2.x, cursor2.y); // TODO
 
 			cursor.movey(lineHeight*2);
 			if (PageAttack.roll > 0) {
@@ -914,11 +1002,17 @@ namespace View {
 
 		// button events
 		public static btnAtkType(button: View.Button) {
+
+			console.log('btnAtkType',button);
+
 			for (let btn of button.data.group) {
 				btn.selected = false;
 			}
 			button.selected = true;
-			this.attackType = button.caption;
+			PageAttack.attackType = button.caption;
+
+			console.log('this.attackType',PageAttack.attackType);
+
 			View.drawPage();
 		}
 		public static btnExecuteAttack(button: Button) {
@@ -963,7 +1057,7 @@ namespace View {
 		}
 		
 		// mouse event
-		public static onMouseMove(mouse: Util.Point){
+		public static onMouseMove(mouse: Util.Point) {
 			let buttonSet = this.buttons.filter((btn) => btn.visible===true);
 			this.hoveredButton = Button.getHoveredButton(buttonSet, mouse);
 			View.drawPage();
@@ -992,6 +1086,7 @@ namespace Control {
 		public static init(){
 			Model.Deck.init();
 			Model.Model.initFactions(2);
+			Model.Alignment.init();
 			Turn.initTurn(0);
 			
 			for (let i=0; i<4; ++i) {
@@ -1034,12 +1129,9 @@ namespace Control {
 			View.View.draw();
 		}
 		public static controlSuccess() {
-
-			console.log('controlSuccess');
-			console.log('Attack.defender',Attack.defender);
-
 			Control.restoreTableState();
 			Attack.defender.faction = Attack.attacker.faction;
+			Attack.defender.cardLocation = Model.CardLocation.structure;
 			Control.beginChooseLink(Attack.defender, [Attack.attacker]);
 		}
 		public static neutralizeSuccess() {
@@ -1165,6 +1257,7 @@ namespace Control {
 				if (this.hoveredLink) {
 					View.View.hoveredCard.decouple();
 					this.hoveredLink.card.addCard(View.View.hoveredCard, this.hoveredLink.linkIndex);
+					this.command = Command.none;
 				}
 				View.View.screenState = View.State.table;
 				View.View.canvas.style.cursor = 'arrow';

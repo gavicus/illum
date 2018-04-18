@@ -113,6 +113,36 @@ var Util;
 })(Util || (Util = {}));
 var Model;
 (function (Model_1) {
+    var CardLocation;
+    (function (CardLocation) {
+        CardLocation[CardLocation["deck"] = 0] = "deck";
+        CardLocation[CardLocation["hand"] = 1] = "hand";
+        CardLocation[CardLocation["open"] = 2] = "open";
+        CardLocation[CardLocation["structure"] = 3] = "structure";
+        CardLocation[CardLocation["discard"] = 4] = "discard";
+    })(CardLocation = Model_1.CardLocation || (Model_1.CardLocation = {}));
+    ;
+    var CardType;
+    (function (CardType) {
+        CardType[CardType["root"] = 0] = "root";
+        CardType[CardType["group"] = 1] = "group";
+        CardType[CardType["special"] = 2] = "special";
+    })(CardType = Model_1.CardType || (Model_1.CardType = {}));
+    ;
+    var Align;
+    (function (Align) {
+        Align[Align["government"] = 0] = "government";
+        Align[Align["communist"] = 1] = "communist";
+        Align[Align["liberal"] = 2] = "liberal";
+        Align[Align["conservative"] = 3] = "conservative";
+        Align[Align["peaceful"] = 4] = "peaceful";
+        Align[Align["violent"] = 5] = "violent";
+        Align[Align["straight"] = 6] = "straight";
+        Align[Align["weird"] = 7] = "weird";
+        Align[Align["criminal"] = 8] = "criminal";
+        Align[Align["fanatic"] = 9] = "fanatic";
+    })(Align = Model_1.Align || (Model_1.Align = {}));
+    ;
     var Model = /** @class */ (function () {
         function Model() {
         }
@@ -195,22 +225,58 @@ var Model;
         return Faction;
     }());
     Model_1.Faction = Faction;
-    var CardLocation;
-    (function (CardLocation) {
-        CardLocation[CardLocation["deck"] = 0] = "deck";
-        CardLocation[CardLocation["hand"] = 1] = "hand";
-        CardLocation[CardLocation["open"] = 2] = "open";
-        CardLocation[CardLocation["structure"] = 3] = "structure";
-        CardLocation[CardLocation["discard"] = 4] = "discard";
-    })(CardLocation = Model_1.CardLocation || (Model_1.CardLocation = {}));
-    ;
-    var CardType;
-    (function (CardType) {
-        CardType[CardType["root"] = 0] = "root";
-        CardType[CardType["group"] = 1] = "group";
-        CardType[CardType["special"] = 2] = "special";
-    })(CardType = Model_1.CardType || (Model_1.CardType = {}));
-    ;
+    var Alignment = /** @class */ (function () {
+        function Alignment() {
+        }
+        Alignment.init = function () {
+            Alignment.data[Align.government] = { name: 'Government', opp: Align.communist };
+            Alignment.data[Align.communist] = { name: 'Communist', opp: Align.government };
+            Alignment.data[Align.liberal] = { name: 'Liberal', opp: Align.conservative };
+            Alignment.data[Align.conservative] = { name: 'Conservative', opp: Align.liberal };
+            Alignment.data[Align.peaceful] = { name: 'Peaceful', opp: Align.violent };
+            Alignment.data[Align.violent] = { name: 'Violent', opp: Align.peaceful };
+            Alignment.data[Align.straight] = { name: 'Straight', opp: Align.weird };
+            Alignment.data[Align.weird] = { name: 'Weird', opp: Align.straight };
+            Alignment.data[Align.criminal] = { name: 'Criminal', opp: null };
+            Alignment.data[Align.fanatic] = { name: 'Fanatic', opp: Align.fanatic };
+        };
+        Alignment.getIndex = function (name) {
+            for (var i = 0; i < Alignment.data.length; ++i) {
+                if (Alignment.data[i].name.toLowerCase() === name.toLowerCase()) {
+                    return i;
+                }
+            }
+        };
+        Alignment.getName = function (index) {
+            return Alignment.data[index];
+        };
+        Alignment.getOpposite = function (index) {
+            return Alignment.data[index].opp;
+        };
+        Alignment.compare = function (first, second) {
+            var result = { same: 0, opposite: 0 };
+            if (!first)
+                return result;
+            for (var _i = 0, first_1 = first; _i < first_1.length; _i++) {
+                var fa = first_1[_i];
+                for (var _a = 0, second_1 = second; _a < second_1.length; _a++) {
+                    var sa = second_1[_a];
+                    var fi = this.getIndex(fa);
+                    var si = this.getIndex(sa);
+                    if (this.data[fi].opp === si) {
+                        result.opposite++;
+                    }
+                    else if (fi === si) {
+                        result.same++;
+                    }
+                }
+            }
+            return result;
+        };
+        Alignment.data = [];
+        return Alignment;
+    }());
+    Model_1.Alignment = Alignment;
     var Card = /** @class */ (function () {
         function Card(name, links) {
             if (links === void 0) { links = 4; }
@@ -321,7 +387,12 @@ var Model;
                 card.cardType = CardType.root;
             }
             else if (type === 'group') {
-                // card.alignments = alignments;
+                if (alignments.length > 0) {
+                    card.alignments = alignments.split(',');
+                }
+                else {
+                    card.alignments = [];
+                }
                 card.cardType = CardType.group;
             }
             else {
@@ -507,6 +578,9 @@ var View;
             View.context.stroke();
         };
         View.drawDetail = function (card, mouse) {
+            // TODO:
+            // long description lines must wrap (see IRS)
+            // IRS income shows as NaN -- make exceptions for special cases
             if (mouse === void 0) { mouse = null; }
             View.clear();
             var gutter = 20;
@@ -522,6 +596,8 @@ var View;
                 cardName = 'The ' + card.name;
             }
             View.context.fillText(cardName, cursor.x, cursor.y);
+            cursor.movey(lineHeight);
+            View.context.fillText('(' + card.alignments + ')', cursor.x, cursor.y);
             // numbers
             cursor.movey(lineHeight);
             View.context.font = View.font;
@@ -999,29 +1075,59 @@ var View;
             configurable: true
         });
         PageAttack.draw = function (ctx) {
+            console.log('PageAttack.draw', PageAttack.attackType);
             var leftMargin = 10;
             var lineHeight = 15;
+            var defenseAttribute = Control.Attack.defender.defense;
+            if (PageAttack.attackType === 'destroy') {
+                defenseAttribute = Control.Attack.defender.attack;
+            }
+            // TODO: compute target proximity to root card
+            // TODO: allow use of cash
+            // TODO: disallow control attacks if attacker has no open out links
+            // TODO: figure in card special abilities
             var cursor = new Util.Point(leftMargin, lineHeight);
             ctx.fillStyle = View.colors.card.text;
             ctx.font = View.font;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'alphabetic';
-            var typeLine = 'attack type: ' + this.attackType;
+            var typeLine = 'attack type: ' + PageAttack.attackType;
             ctx.fillText(typeLine, cursor.x, cursor.y);
             cursor.movey(lineHeight);
             var atkLine = 'attacker: ' + Control.Attack.attacker.name + ' (' + Control.Attack.attacker.attack + ')';
+            atkLine += ' (' + Control.Attack.attacker.alignments + ')';
             ctx.fillText(atkLine, cursor.x, cursor.y);
             cursor.movey(lineHeight);
-            var defLine = 'defender: ' + Control.Attack.defender.name + ' (' + Control.Attack.defender.defense + ')';
+            var defLine = 'defender: ' + Control.Attack.defender.name + ' (' + defenseAttribute + ')';
+            defLine += ' (' + Control.Attack.defender.alignments + ')';
             ctx.fillText(defLine, cursor.x, cursor.y);
-            var totalAtk = PageAttack.attackTotal;
-            var totalDef = PageAttack.defenseTotal;
+            // compute totals
+            var comparison = Model.Alignment.compare(Control.Attack.attacker.alignments, Control.Attack.defender.alignments);
+            var alignBonus = 0;
+            if (PageAttack.attackType === 'control') {
+                alignBonus = comparison.same * 4 - comparison.opposite * 4;
+            }
+            else if (PageAttack.attackType === 'neutralize') {
+                alignBonus = 6 + comparison.same * 4 - comparison.opposite * 4;
+            }
+            else if (PageAttack.attackType === 'destroy') {
+                alignBonus = comparison.opposite * 4 - comparison.same * 4;
+            }
+            var totalAtk = Control.Attack.attacker.attack + alignBonus;
+            var totalDef = defenseAttribute;
+            // show totals
             cursor.movey(lineHeight * 2);
+            var cursor2 = cursor.clone();
             ctx.fillText('total attack: ' + totalAtk, cursor.x, cursor.y);
             cursor.movey(lineHeight);
-            ctx.fillText('total totalDef: ' + totalDef, cursor.x, cursor.y);
+            ctx.fillText('total defense: ' + totalDef, cursor.x, cursor.y);
             cursor.movey(lineHeight);
             ctx.fillText('roll needed: ' + (totalAtk - totalDef) + ' or less', cursor.x, cursor.y);
+            // show bonuses
+            cursor2.movex(120);
+            ctx.fillText('alignment bonus: ' + alignBonus, cursor2.x, cursor2.y);
+            cursor2.movey(lineHeight);
+            ctx.fillText('illuminati defense: ' + 0, cursor2.x, cursor2.y); // TODO
             cursor.movey(lineHeight * 2);
             if (PageAttack.roll > 0) {
                 ctx.fillText('roll: ' + PageAttack.roll, cursor.x, cursor.y);
@@ -1041,12 +1147,14 @@ var View;
         };
         // button events
         PageAttack.btnAtkType = function (button) {
+            console.log('btnAtkType', button);
             for (var _i = 0, _a = button.data.group; _i < _a.length; _i++) {
                 var btn = _a[_i];
                 btn.selected = false;
             }
             button.selected = true;
-            this.attackType = button.caption;
+            PageAttack.attackType = button.caption;
+            console.log('this.attackType', PageAttack.attackType);
             View.drawPage();
         };
         PageAttack.btnExecuteAttack = function (button) {
@@ -1121,6 +1229,7 @@ var Control;
         Control.init = function () {
             Model.Deck.init();
             Model.Model.initFactions(2);
+            Model.Alignment.init();
             Turn.initTurn(0);
             for (var i = 0; i < 4; ++i) {
                 var card = Model.Deck.drawGroup().cardLocation = Model.CardLocation.open;
@@ -1158,10 +1267,9 @@ var Control;
             View.View.draw();
         };
         Control.controlSuccess = function () {
-            console.log('controlSuccess');
-            console.log('Attack.defender', Attack.defender);
             Control.restoreTableState();
             Attack.defender.faction = Attack.attacker.faction;
+            Attack.defender.cardLocation = Model.CardLocation.structure;
             Control.beginChooseLink(Attack.defender, [Attack.attacker]);
         };
         Control.neutralizeSuccess = function () {
@@ -1286,6 +1394,7 @@ var Control;
                 if (this.hoveredLink) {
                     View.View.hoveredCard.decouple();
                     this.hoveredLink.card.addCard(View.View.hoveredCard, this.hoveredLink.linkIndex);
+                    this.command = Command.none;
                 }
                 View.View.screenState = View.State.table;
                 View.View.canvas.style.cursor = 'arrow';

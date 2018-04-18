@@ -57,12 +57,12 @@ namespace Control {
 			console.log('cardSet', cardSet);
 			console.log('linkTargets',this.linkTargets);
 
-			View.View.draw();
+			View.View.drawPage();
 		}
 		public static beginChooseTarget(){
 			View.View.screenState = View.State.table;
 			View.View.canvas.style.cursor = 'crosshair';
-			View.View.draw();
+			View.View.drawPage();
 		}
 		public static cancelAttack() {
 			Attack.clear();
@@ -72,7 +72,7 @@ namespace Control {
 		public static restoreTableState() {
 			View.View.screenState = View.State.table;
 			Turn.factionShownIndex = Turn.factionIndex;
-			View.View.draw();
+			View.View.drawPage();
 		}
 		public static controlSuccess() {
 			Control.restoreTableState();
@@ -116,7 +116,7 @@ namespace Control {
 						dirty = true;
 					}
 				}
-				if (dirty) { View.View.draw(); }
+				if (dirty) { View.View.drawPage(); }
 			}
 			else if (View.View.screenState === View.State.chooseLink) {
 				let closest = null;
@@ -194,7 +194,7 @@ namespace Control {
 				}
 				else {
 					View.View.screenState = View.State.table;
-					View.View.draw();
+					View.View.drawPage();
 				}
 			}
 			else if (View.View.screenState === View.State.chooseLink) {
@@ -207,7 +207,7 @@ namespace Control {
 				}
 				View.View.screenState = View.State.table;
 				View.View.canvas.style.cursor = 'arrow';
-				View.View.draw();
+				View.View.drawPage();
 			}
 			else {
 				if(this.mouse.drag){}
@@ -229,7 +229,7 @@ namespace Control {
 		public static btnShowFaction(button: View.Button) {
 			console.log('btnShowFaction', button.data);
 			Turn.factionShownIndex = Model.Model.factions.indexOf(button.data);
-			View.View.draw();
+			View.View.drawPage();
 		}
 	}
 

@@ -1,6 +1,7 @@
 namespace View {
-	export enum State {table, detail, choice, chooseLink, attackSetup};
+	export enum State {table, detail, choice, attackSetup};
 	export enum AttackState {setup, success, failure};
+	export enum TableState {normal, chooseLink};
 
 	export class CardView {
 		static arrowSize = 0.1;
@@ -339,14 +340,6 @@ namespace View {
 
 		// }
 
-		public static drawLinkChoice(closest){
-			View.drawPage();
-			if (!closest) { return; }
-			View.beginPath();
-			View.context.arc(closest.point.x, closest.point.y, View.getArcSize(), 0, 2*Math.PI, false);
-			View.context.strokeStyle = 'red';
-			View.context.stroke();
-		}
 		public static drawDetail(card: Model.Card, mouse: Util.Point = null) {
 
 			// TODO:
@@ -456,14 +449,16 @@ namespace View {
 		}
 
 		// page events
-		public static onMouseMove(mouse: Util.Point) {
-			if (this.screenState === State.attackSetup) {
-				PageAttack.onMouseMove(mouse);
+		public static onMouseMove(mouse: Util.Point, dragDelta: Util.Point = null) {
+			switch (this.screenState) {
+				case State.attackSetup: PageAttack.onMouseMove(mouse);
+				case State.table: PageTable.onMouseMove(mouse);
 			}
 		}
 		public static onMouseClick(mouse: Util.Point) {
-			if (this.screenState === State.attackSetup) {
-				PageAttack.onMouseClick(mouse);
+			switch (this.screenState) {
+				case State.attackSetup: PageAttack.onMouseClick(mouse);
+				case State.table: PageTable.onMouseClick(mouse);
 			}
 		}
 
@@ -492,12 +487,10 @@ namespace View {
 		public static hoveredButton: Button = null;
 		public static attackType = 'control';
 		public static roll = 0;
-		public static attackObject: any;
-		public static attackCallback: (data:any) => void;
+		public static callback: (data:any) => any;
 
-		public static init(atkObject: any, atkCallback: (data:any) => void) {
-			PageAttack.attackObject = atkObject;
-			PageAttack.attackCallback = atkCallback;
+		public static init(atkCallback: (data:any) => any) {
+			PageAttack.callback = atkCallback;
 
 			this.reset();
 			let lineHeight = 22;
@@ -535,15 +528,13 @@ namespace View {
 			}
 		}
 		public static draw (ctx: CanvasRenderingContext2D) {
-
-			console.log('PageAttack.draw',PageAttack.attackType);
-
 			let leftMargin = 10;
 			let lineHeight = 15;
-
-			let defenseAttribute = PageAttack.attackObject.defender.defense;
+			let attacker = PageAttack.callback({command:'getAttacker'});
+			let defender = PageAttack.callback({command:'getDefender'});
+			let defenseAttribute = defender.defense;
 			if(PageAttack.attackType === 'destroy') {
-				defenseAttribute = PageAttack.attackObject.defender.attack;
+				defenseAttribute = defender.attack;
 			}
 
 			// TODO: compute target proximity to root card
@@ -560,16 +551,16 @@ namespace View {
 			let typeLine = 'attack type: ' + PageAttack.attackType;
 			ctx.fillText(typeLine, cursor.x, cursor.y);
 			cursor.movey(lineHeight);
-			let atkLine = 'attacker: '+PageAttack.attackObject.attacker.name + ' (' + PageAttack.attackObject.attacker.attack + ')';
-			atkLine += ' (' + PageAttack.attackObject.attacker.alignments + ')';
+			let atkLine = 'attacker: '+ attacker.name + ' (' + attacker.attack + ')';
+			atkLine += ' (' + attacker.alignments + ')';
 			ctx.fillText(atkLine, cursor.x, cursor.y);
 			cursor.movey(lineHeight);
-			let defLine = 'defender: '+ PageAttack.attackObject.defender.name + ' (' + defenseAttribute + ')';
-			defLine += ' (' + PageAttack.attackObject.defender.alignments + ')';
+			let defLine = 'defender: '+ defender.name + ' (' + defenseAttribute + ')';
+			defLine += ' (' + defender.alignments + ')';
 			ctx.fillText(defLine, cursor.x, cursor.y);
 
 			// compute totals
-			let comparison = Model.Alignment.compare(PageAttack.attackObject.attacker.alignments, PageAttack.attackObject.defender.alignments);
+			let comparison = Model.Alignment.compare(attacker.alignments, defender.alignments);
 			let alignBonus = 0;
 			if(PageAttack.attackType === 'control') {
 				alignBonus = comparison.same * 4 - comparison.opposite * 4;
@@ -580,7 +571,7 @@ namespace View {
 			else if(PageAttack.attackType === 'destroy') {
 				alignBonus = comparison.opposite * 4 - comparison.same * 4;
 			}
-			let totalAtk = PageAttack.attackObject.attacker.attack + alignBonus;
+			let totalAtk = attacker.attack + alignBonus;
 			let totalDef = defenseAttribute;
 
 			// show totals
@@ -617,8 +608,8 @@ namespace View {
 		}
 
 		// accessors
-		public static get attackTotal() { return PageAttack.attackObject.attacker.attack; }
-		public static get defenseTotal() { return PageAttack.attackObject.defender.defense; }
+		public static get attackTotal() { return PageAttack.callback({command:'getAttacker'}).attack; }
+		public static get defenseTotal() { return PageAttack.callback({command:'getDefender'}).defense; }
 
 		// button events
 		public static btnAtkType(button: View.Button) {
@@ -631,7 +622,7 @@ namespace View {
 		}
 		public static btnExecuteAttack(button: Button) {
 			// TODO: spend cash used in attack
-			PageAttack.attackCallback({command:'attackerDone'});
+			PageAttack.callback({command:'attackerDone'});
 			PageAttack.roll = Util.randomInt(1,6) + Util.randomInt(1,6);
 
 			// let needed = PageAttack.attackTotal - PageAttack.defenseTotal;
@@ -647,7 +638,7 @@ namespace View {
 			View.drawPage();
 		}
 		public static btnCancelAttack(button: Button) {
-			PageAttack.attackCallback({command:'cancelAttack'});
+			PageAttack.callback({command:'cancelAttack'});
 			View.screenState = State.table;
 			PageAttack.reset();
 			View.drawPage();
@@ -655,16 +646,16 @@ namespace View {
 		public static btnDone(button: Button) {
 			View.screenState = State.table;
 			if (PageAttack.state === AttackState.failure) {
-				PageAttack.attackCallback({command:'cancelAttack'});
+				PageAttack.callback({command:'cancelAttack'});
 			}
 			else if (PageAttack.attackType === 'control') {
-				PageAttack.attackCallback({command:'controlSuccess'});
+				PageAttack.callback({command:'controlSuccess'});
 			}
 			else if (PageAttack.attackType === 'neutralize') {
-				PageAttack.attackCallback({command:'neutralizeSuccess'});
+				PageAttack.callback({command:'neutralizeSuccess'});
 			}
 			else if (PageAttack.attackType === 'destroy') {
-				PageAttack.attackCallback({command:'destroySuccess'});
+				PageAttack.callback({command:'destroySuccess'});
 			}
 			PageAttack.reset();
 			View.drawPage();
@@ -684,11 +675,21 @@ namespace View {
 		
 	}
 	export class PageTable {
+		public static state: TableState;
+		public static linkTargets: Model.LinkTarget[];
+		public static hoveredLink: Model.LinkTarget = null;
+		private static callback: (any) => any;
+		// TODO: handle own input events
 		public static colors = {
 			headerFill: '#eee',
 		};
 
-		public static draw(ctx: CanvasRenderingContext2D){
+		public static init(callback: (any) => any) {
+			PageTable.callback = callback;
+			PageTable.state = TableState.normal;
+		}
+
+		public static draw(ctx: CanvasRenderingContext2D) {
 
 			// structure
 			let faction = View.turnObject.factionShown;
@@ -718,11 +719,91 @@ namespace View {
 			}
 
 			// hovered
-			if(View.hoveredCard){
+			if (PageTable.state === TableState.chooseLink){
+
+			}
+			else if (View.hoveredCard){
 				CardView.drawHovered(View.hoveredCard,ctx);
 			}
 
 		}
 		
+		public static drawLinkChoice(closest){
+			View.drawPage();
+			if (!closest) { return; }
+			View.beginPath();
+			View.context.arc(closest.point.x, closest.point.y, View.getArcSize(), 0, 2*Math.PI, false);
+			View.context.strokeStyle = 'red';
+			View.context.stroke();
+		}
+
+		public static onMouseMove(mouse: Util.Point) {
+			if(PageTable.state === TableState.chooseLink) {
+				let closest = null;
+				let sqDist = 0;
+				let minDist = Math.pow(View.cardLength, 2);
+				for (let target of this.linkTargets) {
+					let d2 = mouse.distSquared(target.point);
+					if (d2 > minDist) { continue; }
+					if (closest===null || d2 < sqDist){
+						closest = target;
+						sqDist = d2;
+					}
+				}
+				this.hoveredLink = closest;
+				PageTable.drawLinkChoice(closest);
+			}
+			else {
+				let dirty = false;
+				let hovered = Model.Model.getHoveredCard(mouse, Model.Deck.tableCards);
+				if(hovered !== View.hoveredCard){
+					View.hoveredCard = hovered;
+					dirty = true;
+				}
+				let btn = View.getHoveredButton(View.factionButtons, mouse);
+				if (btn !== View.hoveredButton) {
+					View.hoveredButton = btn;
+					dirty = true;
+				}
+				if (dirty) { View.drawPage(); }
+			}
+		}
+		public static onMouseClick(mouse: Util.Point) {
+			
+			
+			if (PageTable.state === TableState.chooseLink) {
+				// TODO: check for card overlap
+				if (PageTable.hoveredLink) { // place the card
+
+					let defender = PageAttack.callback({command:'getDefender'});
+
+					defender.decouple();
+					PageTable.hoveredLink.card.addCard(defender, PageTable.hoveredLink.linkIndex);
+					PageTable.callback({command:'clearCommand'});
+					PageTable.state = TableState.normal;
+					View.canvas.style.cursor = 'arrow';
+					View.drawPage();
+				}
+			}
+
+			else if (View.hoveredButton) {
+				View.hoveredButton.callback(View.hoveredButton);
+			}
+
+			else if (View.hoveredCard){
+				if (PageTable.callback({command:'commandIsAttack'})) {
+					View.canvas.style.cursor = '';
+					PageTable.callback({command:'setDefender', value:View.hoveredCard});
+					View.screenState = State.attackSetup;
+					PageAttack.reset();
+					View.drawPage();
+				}
+				else {
+					View.screenState = State.detail;
+					View.drawDetail(View.hoveredCard, mouse);
+				}
+			}
+
+		}
 	}
 }

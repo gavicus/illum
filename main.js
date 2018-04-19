@@ -492,8 +492,7 @@ var View;
         State[State["table"] = 0] = "table";
         State[State["detail"] = 1] = "detail";
         State[State["choice"] = 2] = "choice";
-        State[State["chooseLink"] = 3] = "chooseLink";
-        State[State["attackSetup"] = 4] = "attackSetup";
+        State[State["attackSetup"] = 3] = "attackSetup";
     })(State = View_1.State || (View_1.State = {}));
     ;
     var AttackState;
@@ -502,6 +501,12 @@ var View;
         AttackState[AttackState["success"] = 1] = "success";
         AttackState[AttackState["failure"] = 2] = "failure";
     })(AttackState = View_1.AttackState || (View_1.AttackState = {}));
+    ;
+    var TableState;
+    (function (TableState) {
+        TableState[TableState["normal"] = 0] = "normal";
+        TableState[TableState["chooseLink"] = 1] = "chooseLink";
+    })(TableState = View_1.TableState || (View_1.TableState = {}));
     ;
     var CardView = /** @class */ (function () {
         function CardView() {
@@ -830,16 +835,6 @@ var View;
         // 		CardView.drawHovered(View.hoveredCard,View.context);
         // 	}
         // }
-        View.drawLinkChoice = function (closest) {
-            View.drawPage();
-            if (!closest) {
-                return;
-            }
-            View.beginPath();
-            View.context.arc(closest.point.x, closest.point.y, View.getArcSize(), 0, 2 * Math.PI, false);
-            View.context.strokeStyle = 'red';
-            View.context.stroke();
-        };
         View.drawDetail = function (card, mouse) {
             // TODO:
             // long description lines must wrap (see IRS)
@@ -973,14 +968,17 @@ var View;
             configurable: true
         });
         // page events
-        View.onMouseMove = function (mouse) {
-            if (this.screenState === State.attackSetup) {
-                PageAttack.onMouseMove(mouse);
+        View.onMouseMove = function (mouse, dragDelta) {
+            if (dragDelta === void 0) { dragDelta = null; }
+            switch (this.screenState) {
+                case State.attackSetup: PageAttack.onMouseMove(mouse);
+                case State.table: PageTable.onMouseMove(mouse);
             }
         };
         View.onMouseClick = function (mouse) {
-            if (this.screenState === State.attackSetup) {
-                PageAttack.onMouseClick(mouse);
+            switch (this.screenState) {
+                case State.attackSetup: PageAttack.onMouseClick(mouse);
+                case State.table: PageTable.onMouseClick(mouse);
             }
         };
         // draw helper functions
@@ -1018,9 +1016,8 @@ var View;
     var PageAttack = /** @class */ (function () {
         function PageAttack() {
         }
-        PageAttack.init = function (atkObject, atkCallback) {
-            PageAttack.attackObject = atkObject;
-            PageAttack.attackCallback = atkCallback;
+        PageAttack.init = function (atkCallback) {
+            PageAttack.callback = atkCallback;
             this.reset();
             var lineHeight = 22;
             var cursor = new Util.Point(10, 150);
@@ -1067,12 +1064,13 @@ var View;
             }
         };
         PageAttack.draw = function (ctx) {
-            console.log('PageAttack.draw', PageAttack.attackType);
             var leftMargin = 10;
             var lineHeight = 15;
-            var defenseAttribute = PageAttack.attackObject.defender.defense;
+            var attacker = PageAttack.callback({ command: 'getAttacker' });
+            var defender = PageAttack.callback({ command: 'getDefender' });
+            var defenseAttribute = defender.defense;
             if (PageAttack.attackType === 'destroy') {
-                defenseAttribute = PageAttack.attackObject.defender.attack;
+                defenseAttribute = defender.attack;
             }
             // TODO: compute target proximity to root card
             // TODO: allow use of cash
@@ -1087,15 +1085,15 @@ var View;
             var typeLine = 'attack type: ' + PageAttack.attackType;
             ctx.fillText(typeLine, cursor.x, cursor.y);
             cursor.movey(lineHeight);
-            var atkLine = 'attacker: ' + PageAttack.attackObject.attacker.name + ' (' + PageAttack.attackObject.attacker.attack + ')';
-            atkLine += ' (' + PageAttack.attackObject.attacker.alignments + ')';
+            var atkLine = 'attacker: ' + attacker.name + ' (' + attacker.attack + ')';
+            atkLine += ' (' + attacker.alignments + ')';
             ctx.fillText(atkLine, cursor.x, cursor.y);
             cursor.movey(lineHeight);
-            var defLine = 'defender: ' + PageAttack.attackObject.defender.name + ' (' + defenseAttribute + ')';
-            defLine += ' (' + PageAttack.attackObject.defender.alignments + ')';
+            var defLine = 'defender: ' + defender.name + ' (' + defenseAttribute + ')';
+            defLine += ' (' + defender.alignments + ')';
             ctx.fillText(defLine, cursor.x, cursor.y);
             // compute totals
-            var comparison = Model.Alignment.compare(PageAttack.attackObject.attacker.alignments, PageAttack.attackObject.defender.alignments);
+            var comparison = Model.Alignment.compare(attacker.alignments, defender.alignments);
             var alignBonus = 0;
             if (PageAttack.attackType === 'control') {
                 alignBonus = comparison.same * 4 - comparison.opposite * 4;
@@ -1106,7 +1104,7 @@ var View;
             else if (PageAttack.attackType === 'destroy') {
                 alignBonus = comparison.opposite * 4 - comparison.same * 4;
             }
-            var totalAtk = PageAttack.attackObject.attacker.attack + alignBonus;
+            var totalAtk = attacker.attack + alignBonus;
             var totalDef = defenseAttribute;
             // show totals
             cursor.movey(lineHeight * 2);
@@ -1140,12 +1138,12 @@ var View;
         };
         Object.defineProperty(PageAttack, "attackTotal", {
             // accessors
-            get: function () { return PageAttack.attackObject.attacker.attack; },
+            get: function () { return PageAttack.callback({ command: 'getAttacker' }).attack; },
             enumerable: true,
             configurable: true
         });
         Object.defineProperty(PageAttack, "defenseTotal", {
-            get: function () { return PageAttack.attackObject.defender.defense; },
+            get: function () { return PageAttack.callback({ command: 'getDefender' }).defense; },
             enumerable: true,
             configurable: true
         });
@@ -1161,7 +1159,7 @@ var View;
         };
         PageAttack.btnExecuteAttack = function (button) {
             // TODO: spend cash used in attack
-            PageAttack.attackCallback({ command: 'attackerDone' });
+            PageAttack.callback({ command: 'attackerDone' });
             PageAttack.roll = Util.randomInt(1, 6) + Util.randomInt(1, 6);
             // let needed = PageAttack.attackTotal - PageAttack.defenseTotal;
             var needed = 12; // testing
@@ -1175,7 +1173,7 @@ var View;
             View.drawPage();
         };
         PageAttack.btnCancelAttack = function (button) {
-            PageAttack.attackCallback({ command: 'cancelAttack' });
+            PageAttack.callback({ command: 'cancelAttack' });
             View.screenState = State.table;
             PageAttack.reset();
             View.drawPage();
@@ -1183,16 +1181,16 @@ var View;
         PageAttack.btnDone = function (button) {
             View.screenState = State.table;
             if (PageAttack.state === AttackState.failure) {
-                PageAttack.attackCallback({ command: 'cancelAttack' });
+                PageAttack.callback({ command: 'cancelAttack' });
             }
             else if (PageAttack.attackType === 'control') {
-                PageAttack.attackCallback({ command: 'controlSuccess' });
+                PageAttack.callback({ command: 'controlSuccess' });
             }
             else if (PageAttack.attackType === 'neutralize') {
-                PageAttack.attackCallback({ command: 'neutralizeSuccess' });
+                PageAttack.callback({ command: 'neutralizeSuccess' });
             }
             else if (PageAttack.attackType === 'destroy') {
-                PageAttack.attackCallback({ command: 'destroySuccess' });
+                PageAttack.callback({ command: 'destroySuccess' });
             }
             PageAttack.reset();
             View.drawPage();
@@ -1218,6 +1216,10 @@ var View;
     var PageTable = /** @class */ (function () {
         function PageTable() {
         }
+        PageTable.init = function (callback) {
+            PageTable.callback = callback;
+            PageTable.state = TableState.normal;
+        };
         PageTable.draw = function (ctx) {
             // structure
             var faction = View.turnObject.factionShown;
@@ -1250,10 +1252,90 @@ var View;
                 btn.draw(ctx, btn === View.hoveredButton);
             }
             // hovered
-            if (View.hoveredCard) {
+            if (PageTable.state === TableState.chooseLink) {
+            }
+            else if (View.hoveredCard) {
                 CardView.drawHovered(View.hoveredCard, ctx);
             }
         };
+        PageTable.drawLinkChoice = function (closest) {
+            View.drawPage();
+            if (!closest) {
+                return;
+            }
+            View.beginPath();
+            View.context.arc(closest.point.x, closest.point.y, View.getArcSize(), 0, 2 * Math.PI, false);
+            View.context.strokeStyle = 'red';
+            View.context.stroke();
+        };
+        PageTable.onMouseMove = function (mouse) {
+            if (PageTable.state === TableState.chooseLink) {
+                var closest = null;
+                var sqDist = 0;
+                var minDist = Math.pow(View.cardLength, 2);
+                for (var _i = 0, _a = this.linkTargets; _i < _a.length; _i++) {
+                    var target = _a[_i];
+                    var d2 = mouse.distSquared(target.point);
+                    if (d2 > minDist) {
+                        continue;
+                    }
+                    if (closest === null || d2 < sqDist) {
+                        closest = target;
+                        sqDist = d2;
+                    }
+                }
+                this.hoveredLink = closest;
+                PageTable.drawLinkChoice(closest);
+            }
+            else {
+                var dirty = false;
+                var hovered = Model.Model.getHoveredCard(mouse, Model.Deck.tableCards);
+                if (hovered !== View.hoveredCard) {
+                    View.hoveredCard = hovered;
+                    dirty = true;
+                }
+                var btn = View.getHoveredButton(View.factionButtons, mouse);
+                if (btn !== View.hoveredButton) {
+                    View.hoveredButton = btn;
+                    dirty = true;
+                }
+                if (dirty) {
+                    View.drawPage();
+                }
+            }
+        };
+        PageTable.onMouseClick = function (mouse) {
+            if (PageTable.state === TableState.chooseLink) {
+                // TODO: check for card overlap
+                if (PageTable.hoveredLink) {
+                    var defender = PageAttack.callback({ command: 'getDefender' });
+                    defender.decouple();
+                    PageTable.hoveredLink.card.addCard(defender, PageTable.hoveredLink.linkIndex);
+                    PageTable.callback({ command: 'clearCommand' });
+                    PageTable.state = TableState.normal;
+                    View.canvas.style.cursor = 'arrow';
+                    View.drawPage();
+                }
+            }
+            else if (View.hoveredButton) {
+                View.hoveredButton.callback(View.hoveredButton);
+            }
+            else if (View.hoveredCard) {
+                if (PageTable.callback({ command: 'commandIsAttack' })) {
+                    View.canvas.style.cursor = '';
+                    PageTable.callback({ command: 'setDefender', value: View.hoveredCard });
+                    View.screenState = State.attackSetup;
+                    PageAttack.reset();
+                    View.drawPage();
+                }
+                else {
+                    View.screenState = State.detail;
+                    View.drawDetail(View.hoveredCard, mouse);
+                }
+            }
+        };
+        PageTable.hoveredLink = null;
+        // TODO: handle own input events
         PageTable.colors = {
             headerFill: '#eee',
         };
@@ -1282,7 +1364,8 @@ var Control;
                 var card = Model.Deck.drawGroup().cardLocation = Model.CardLocation.open;
             }
             View.View.init(Control.viewCallback, Turn);
-            View.PageAttack.init(Attack, Control.attackCallback);
+            View.PageAttack.init(Control.attackCallback);
+            View.PageTable.init(Control.tableCallback);
             this.mouse = {
                 down: false,
                 drag: false,
@@ -1297,31 +1380,31 @@ var Control;
             }
         };
         Control.attackCallback = function (data) {
-            if (data.command === 'attackerDone') {
-                Turn.setHasActed(Attack.attacker);
+            switch (data.command) {
+                case 'attackerDone': Turn.setHasActed(Attack.attacker);
+                case 'cancelAttack': Control.cancelAttack();
+                case 'controlSuccess': Control.controlSuccess();
+                case 'neutralizeSuccess': Control.neutralizeSuccess();
+                case 'destroySuccess': Control.destroySuccess();
+                case 'getDefender': return Attack.defender;
+                case 'getAttacker': return Attack.attacker;
             }
-            else if (data.command === 'cancelAttack') {
-                Control.cancelAttack();
-            }
-            else if (data.command === 'controlSuccess') {
-                Control.controlSuccess();
-            }
-            else if (data.command === 'neutralizeSuccess') {
-                Control.neutralizeSuccess();
-            }
-            else if (data.command === 'destroySuccess') {
-                Control.destroySuccess();
+        };
+        Control.tableCallback = function (data) {
+            switch (data.command) {
+                case 'commandIsAttack': return Control.command == Command.attack;
+                case 'setDefender':
+                    Attack.setDefender(data.value);
+                    console.log('setDefender attacker', Attack.attacker);
+                case 'clearCommand': this.command = Command.none;
             }
         };
         Control.beginChooseLink = function (cardToPlace, cardSet) {
             if (cardSet === void 0) { cardSet = Model.Deck.structureCards; }
             // TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
-            View.View.screenState = View.State.chooseLink;
-            this.linkTargets = Model.Model.getLinkTargets(View.View.hoveredCard, cardSet);
-            console.log('beginChooseLink');
-            console.log('cardToPlace', cardToPlace);
-            console.log('cardSet', cardSet);
-            console.log('linkTargets', this.linkTargets);
+            View.View.screenState = View.State.table;
+            View.PageTable.state = View.TableState.chooseLink;
+            View.PageTable.linkTargets = Model.Model.getLinkTargets(cardToPlace, cardSet);
             View.View.drawPage();
         };
         Control.beginChooseTarget = function () {
@@ -1330,7 +1413,7 @@ var Control;
             View.View.drawPage();
         };
         Control.cancelAttack = function () {
-            Attack.clear();
+            // Attack.clear();
             this.command = Command.none;
         };
         Control.restoreTableState = function () {
@@ -1339,6 +1422,8 @@ var Control;
             View.View.drawPage();
         };
         Control.controlSuccess = function () {
+            console.log('controlSuccess');
+            console.log('attacker', Attack.attacker);
             Control.restoreTableState();
             Attack.defender.faction = Attack.attacker.faction;
             Attack.defender.cardLocation = Model.CardLocation.structure;
@@ -1357,51 +1442,30 @@ var Control;
         };
         Control.onMouseMove = function (event) {
             var mouse = new Util.Point(event.offsetX, event.offsetY);
-            if (this.mouse.down && !mouse.equals(this.mouse.last)) {
-                this.mouse.drag = true;
+            if (Control.mouse.down && !mouse.equals(Control.mouse.last)) {
+                Control.mouse.drag = true;
             }
-            if (View.View.screenState === View.State.table) {
-                var dirty = false;
-                if (this.mouse.drag) {
-                    var delta = mouse.minus(this.mouse.last);
-                    View.View.dragFocus(delta);
-                    dirty = true;
-                }
-                else {
-                    var hovered = Model.Model.getHoveredCard(mouse, Model.Deck.tableCards);
-                    if (hovered !== View.View.hoveredCard) {
-                        View.View.hoveredCard = hovered;
-                        dirty = true;
-                    }
-                    var btn = View.View.getHoveredButton(View.View.factionButtons, mouse);
-                    if (btn !== View.View.hoveredButton) {
-                        View.View.hoveredButton = btn;
-                        dirty = true;
-                    }
-                }
-                if (dirty) {
-                    View.View.drawPage();
-                }
+            if (Control.mouse.drag && View.View.screenState === View.State.table) {
+                var delta = mouse.minus(Control.mouse.last);
+                View.View.dragFocus(delta);
+                View.View.drawPage();
             }
-            else if (View.View.screenState === View.State.chooseLink) {
-                var closest = null;
-                var sqDist = 0;
-                var minDist = Math.pow(View.View.cardLength, 2);
-                for (var _i = 0, _a = this.linkTargets; _i < _a.length; _i++) {
-                    var target = _a[_i];
-                    var d2 = mouse.distSquared(target.point);
-                    if (d2 > minDist) {
-                        continue;
-                    }
-                    if (closest === null || d2 < sqDist) {
-                        closest = target;
-                        sqDist = d2;
-                    }
-                }
-                this.hoveredLink = closest;
-                View.View.drawLinkChoice(closest);
-            }
-            else if (View.View.screenState === View.State.detail) {
+            // if (View.View.screenState === View.State.chooseLink) {
+            // 	let closest = null;
+            // 	let sqDist = 0;
+            // 	let minDist = Math.pow(View.View.cardLength, 2);
+            // 	for (let target of this.linkTargets) {
+            // 		let d2 = mouse.distSquared(target.point);
+            // 		if (d2 > minDist) { continue; }
+            // 		if (closest===null || d2 < sqDist){
+            // 			closest = target;
+            // 			sqDist = d2;
+            // 		}
+            // 	}
+            // 	this.hoveredLink = closest;
+            // 	View.View.drawLinkChoice(closest);
+            // }
+            if (View.View.screenState === View.State.detail) {
                 View.View.drawDetail(View.View.hoveredCard, mouse);
             }
             else {
@@ -1414,63 +1478,17 @@ var Control;
             this.mouse.drag = false;
         };
         Control.onMouseUp = function (event) {
+            Control.mouse.drag = false;
             var mouse = new Util.Point(event.offsetX, event.offsetY);
-            if (View.View.screenState === View.State.table) {
-                if (this.mouse.drag) { }
-                else if (View.View.hoveredButton) {
-                    View.View.hoveredButton.callback(View.View.hoveredButton);
-                }
-                else if (View.View.hoveredCard) {
-                    if (this.command == Command.attack) {
-                        // TODO: allow cancel
-                        View.View.canvas.style.cursor = '';
-                        Attack.setDefender(View.View.hoveredCard);
-                        View.View.screenState = View.State.attackSetup;
-                        View.PageAttack.reset();
-                        View.View.drawPage();
-                        // Turn.setHasActed(this.attacker);
-                        // TODO: handle control attempt
-                        // View.View.hoveredCard.cardLocation = Model.CardLocation.structure;
-                        // TODO: new card should only link to controlling card
-                        // place the newly controlled card
-                        // this.beginChooseLink([this.attacker]);
-                        // this.command = null;
-                    }
-                    else {
-                        View.View.screenState = View.State.detail;
-                        View.View.drawDetail(View.View.hoveredCard, mouse);
-                    }
-                }
-            }
-            else if (View.View.screenState === View.State.detail) {
+            if (View.View.screenState === View.State.detail) {
                 // TODO: buttons, options, etc.
                 if (View.View.hoveredButton) {
-                    // let caption = View.View.hoveredButton.caption;
-                    // if (caption === 'move') {
-                    // 	this.beginChooseLink();
-                    // } else if (caption === 'control') {
-                    // 	Attack.setAttacker(View.View.hoveredCard);
-                    // 	this.command = Command.attack;
-                    // 	this.beginChooseTarget();
-                    // }
                     View.View.hoveredButton.callback(View.View.hoveredButton);
                 }
                 else {
                     View.View.screenState = View.State.table;
                     View.View.drawPage();
                 }
-            }
-            else if (View.View.screenState === View.State.chooseLink) {
-                // move the card !
-                // TODO: check for card overlap
-                if (this.hoveredLink) {
-                    View.View.hoveredCard.decouple();
-                    this.hoveredLink.card.addCard(View.View.hoveredCard, this.hoveredLink.linkIndex);
-                    this.command = Command.none;
-                }
-                View.View.screenState = View.State.table;
-                View.View.canvas.style.cursor = 'arrow';
-                View.View.drawPage();
             }
             else {
                 if (this.mouse.drag) { }
@@ -1490,7 +1508,6 @@ var Control;
             console.log('btnMoveGroup');
         };
         Control.btnShowFaction = function (button) {
-            console.log('btnShowFaction', button.data);
             Turn.factionShownIndex = Model.Model.factions.indexOf(button.data);
             View.View.drawPage();
         };
@@ -1499,6 +1516,7 @@ var Control;
         Control.command = null;
         Control.attacker = null;
         Control.defender = null;
+        Control.movingCard = null;
         return Control;
     }());
     Control_1.Control = Control;
@@ -1516,12 +1534,16 @@ var Control;
             this._defender = d;
         };
         Object.defineProperty(Attack, "attacker", {
-            get: function () { return Attack._attacker; },
+            get: function () {
+                return Attack._attacker;
+            },
             enumerable: true,
             configurable: true
         });
         Object.defineProperty(Attack, "defender", {
-            get: function () { return Attack._defender; },
+            get: function () {
+                return Attack._defender;
+            },
             enumerable: true,
             configurable: true
         });

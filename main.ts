@@ -10,6 +10,7 @@ namespace Control {
 		public static command: Command = null;
 		public static attacker: Model.Card = null;
 		public static defender: Model.Card = null;
+		public static movingCard: Model.Card = null;
 
 		public static init(){
 			Model.Deck.init();
@@ -21,9 +22,9 @@ namespace Control {
 				let card = Model.Deck.drawGroup().cardLocation = Model.CardLocation.open;
 			}
 			
-			
 			View.View.init(Control.viewCallback, Turn);
-			View.PageAttack.init(Attack, Control.attackCallback);
+			View.PageAttack.init(Control.attackCallback);
+			View.PageTable.init(Control.tableCallback);
 
 			this.mouse = {
 				down: false,
@@ -39,24 +40,30 @@ namespace Control {
 				case 'btnShowFaction': return Control.btnShowFaction;
 			}
 		}
-		public static attackCallback(data): void {
-			if (data.command === 'attackerDone') { Turn.setHasActed(Attack.attacker); }
-			else if (data.command === 'cancelAttack') { Control.cancelAttack(); }
-			else if (data.command === 'controlSuccess') { Control.controlSuccess(); }
-			else if (data.command === 'neutralizeSuccess') { Control.neutralizeSuccess(); }
-			else if (data.command === 'destroySuccess') { Control.destroySuccess(); }
+		public static attackCallback(data): any {
+			switch(data.command) {
+				case 'attackerDone': Turn.setHasActed(Attack.attacker);
+				case 'cancelAttack': Control.cancelAttack();
+				case 'controlSuccess': Control.controlSuccess();
+				case 'neutralizeSuccess': Control.neutralizeSuccess();
+				case 'destroySuccess': Control.destroySuccess();
+				case 'getDefender': return Attack.defender;
+				case 'getAttacker': return Attack.attacker;
+			}
+		}
+		public static tableCallback(data): any {
+			switch(data.command) {
+				case 'commandIsAttack': return Control.command == Command.attack;
+				case 'setDefender': Attack.setDefender(data.value); console.log('setDefender attacker',Attack.attacker);
+				case 'clearCommand': this.command = Command.none;
+			}
 		}
 
 		public static beginChooseLink(cardToPlace: Model.Card, cardSet: Model.Card[] = Model.Deck.structureCards){
 			// TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
-			View.View.screenState = View.State.chooseLink;
-			this.linkTargets = Model.Model.getLinkTargets(View.View.hoveredCard, cardSet);
-
-			console.log('beginChooseLink');
-			console.log('cardToPlace',cardToPlace);
-			console.log('cardSet', cardSet);
-			console.log('linkTargets',this.linkTargets);
-
+			View.View.screenState = View.State.table;
+			View.PageTable.state = View.TableState.chooseLink;
+			View.PageTable.linkTargets = Model.Model.getLinkTargets(cardToPlace, cardSet);
 			View.View.drawPage();
 		}
 		public static beginChooseTarget(){
@@ -65,7 +72,7 @@ namespace Control {
 			View.View.drawPage();
 		}
 		public static cancelAttack() {
-			Attack.clear();
+			// Attack.clear();
 			this.command = Command.none;
 		}
 		
@@ -75,6 +82,10 @@ namespace Control {
 			View.View.drawPage();
 		}
 		public static controlSuccess() {
+
+			console.log('controlSuccess');
+			console.log('attacker',Attack.attacker);
+
 			Control.restoreTableState();
 			Attack.defender.faction = Attack.attacker.faction;
 			Attack.defender.cardLocation = Model.CardLocation.structure;
@@ -94,46 +105,30 @@ namespace Control {
 		}
 		public static onMouseMove(event: MouseEvent){
 			let mouse = new Util.Point(event.offsetX, event.offsetY);
-			if (this.mouse.down && !mouse.equals(this.mouse.last)) {
-				this.mouse.drag = true;
+			if (Control.mouse.down && !mouse.equals(Control.mouse.last)) {
+				Control.mouse.drag = true;
 			}
-			if (View.View.screenState === View.State.table){
-				let dirty = false;
-				if(this.mouse.drag){
-					let delta = mouse.minus(this.mouse.last);
-					View.View.dragFocus(delta);
-					dirty = true;
-				}
-				else {
-					let hovered = Model.Model.getHoveredCard(mouse, Model.Deck.tableCards);
-					if(hovered !== View.View.hoveredCard){
-						View.View.hoveredCard = hovered;
-						dirty = true;
-					}
-					let btn = View.View.getHoveredButton(View.View.factionButtons, mouse);
-					if (btn !== View.View.hoveredButton) {
-						View.View.hoveredButton = btn;
-						dirty = true;
-					}
-				}
-				if (dirty) { View.View.drawPage(); }
+			if(Control.mouse.drag && View.View.screenState === View.State.table){
+				let delta = mouse.minus(Control.mouse.last);
+				View.View.dragFocus(delta);
+				View.View.drawPage();
 			}
-			else if (View.View.screenState === View.State.chooseLink) {
-				let closest = null;
-				let sqDist = 0;
-				let minDist = Math.pow(View.View.cardLength, 2);
-				for (let target of this.linkTargets) {
-					let d2 = mouse.distSquared(target.point);
-					if (d2 > minDist) { continue; }
-					if (closest===null || d2 < sqDist){
-						closest = target;
-						sqDist = d2;
-					}
-				}
-				this.hoveredLink = closest;
-				View.View.drawLinkChoice(closest);
-			}
-			else if (View.View.screenState === View.State.detail) {
+			// if (View.View.screenState === View.State.chooseLink) {
+			// 	let closest = null;
+			// 	let sqDist = 0;
+			// 	let minDist = Math.pow(View.View.cardLength, 2);
+			// 	for (let target of this.linkTargets) {
+			// 		let d2 = mouse.distSquared(target.point);
+			// 		if (d2 > minDist) { continue; }
+			// 		if (closest===null || d2 < sqDist){
+			// 			closest = target;
+			// 			sqDist = d2;
+			// 		}
+			// 	}
+			// 	this.hoveredLink = closest;
+			// 	View.View.drawLinkChoice(closest);
+			// }
+			if (View.View.screenState === View.State.detail) {
 				View.View.drawDetail(View.View.hoveredCard, mouse);
 			}
 			else { View.View.onMouseMove(mouse); }
@@ -144,70 +139,18 @@ namespace Control {
 			this.mouse.drag = false;
 		}
 		public static onMouseUp(event: MouseEvent){
+			Control.mouse.drag = false;
 			let mouse = new Util.Point(event.offsetX, event.offsetY);
 			
-			if(View.View.screenState === View.State.table){
-				if(this.mouse.drag){}
-				else if (View.View.hoveredButton) {
-					View.View.hoveredButton.callback(View.View.hoveredButton);
- 				}
-				else if (View.View.hoveredCard){
-					if (this.command == Command.attack) {
-						// TODO: allow cancel
-						View.View.canvas.style.cursor = '';
-						Attack.setDefender(View.View.hoveredCard);
-						View.View.screenState = View.State.attackSetup;
-						View.PageAttack.reset();
-						View.View.drawPage();
-
-						// Turn.setHasActed(this.attacker);
-
-						// TODO: handle control attempt
-
-						// View.View.hoveredCard.cardLocation = Model.CardLocation.structure;
-
-						// TODO: new card should only link to controlling card
-						// place the newly controlled card
-
-						// this.beginChooseLink([this.attacker]);
-						// this.command = null;
-
-					}
-					else {
-						View.View.screenState = View.State.detail;
-						View.View.drawDetail(View.View.hoveredCard, mouse);
-					}
-				}
-			}
-			else if (View.View.screenState === View.State.detail) {
+			if (View.View.screenState === View.State.detail) {
 				// TODO: buttons, options, etc.
 				if (View.View.hoveredButton) {
-					// let caption = View.View.hoveredButton.caption;
-					// if (caption === 'move') {
-					// 	this.beginChooseLink();
-					// } else if (caption === 'control') {
-					// 	Attack.setAttacker(View.View.hoveredCard);
-					// 	this.command = Command.attack;
-					// 	this.beginChooseTarget();
-					// }
 					View.View.hoveredButton.callback(View.View.hoveredButton);
 				}
 				else {
 					View.View.screenState = View.State.table;
 					View.View.drawPage();
 				}
-			}
-			else if (View.View.screenState === View.State.chooseLink) {
-				// move the card !
-				// TODO: check for card overlap
-				if (this.hoveredLink) {
-					View.View.hoveredCard.decouple();
-					this.hoveredLink.card.addCard(View.View.hoveredCard, this.hoveredLink.linkIndex);
-					this.command = Command.none;
-				}
-				View.View.screenState = View.State.table;
-				View.View.canvas.style.cursor = 'arrow';
-				View.View.drawPage();
 			}
 			else {
 				if(this.mouse.drag){}
@@ -227,7 +170,6 @@ namespace Control {
 			console.log('btnMoveGroup');
 		}
 		public static btnShowFaction(button: View.Button) {
-			console.log('btnShowFaction', button.data);
 			Turn.factionShownIndex = Model.Model.factions.indexOf(button.data);
 			View.View.drawPage();
 		}
@@ -246,8 +188,12 @@ namespace Control {
 		public static setDefender(d:Model.Card){
 			this._defender = d;
 		}
-		public static get attacker(){ return Attack._attacker; }
-		public static get defender(){ return Attack._defender; }
+		public static get attacker(){
+			return Attack._attacker;
+		}
+		public static get defender(){
+			return Attack._defender;
+		}
 	}
 
 	export class Turn {

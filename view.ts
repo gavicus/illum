@@ -249,7 +249,7 @@ namespace View {
 	}
 
 	// TODO: move faction view buttons from View to PageView
-	
+
 	export class View {
 		static screenState: State;
 		static readonly arcRadius = 0.15;
@@ -482,6 +482,7 @@ namespace View {
 		}
 	}
 
+	// TODO: [execute] should keep us on attack setup page until [done] is clicked
 	export class PageAttack {
 		// TODO: store own colors
 		public static state: AttackState;
@@ -496,10 +497,9 @@ namespace View {
 
 			this.reset();
 			let lineHeight = 22;
-			let cursor = new Util.Point(10,150);
-			this.buttons.push( new Button('execute', PageAttack.btnExecuteAttack, cursor) );
-			cursor.movey(lineHeight);
-			this.buttons.push( new Button('cancel', PageAttack.btnCancelAttack, cursor) );
+			let cursor = new Util.Point(0,0);
+
+			// attack type
 			cursor.set(View.canvas.width - Button.size.x - 10, 10);
 			let cmd1 = new Button('control', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
 			cursor.movey(lineHeight);
@@ -511,10 +511,36 @@ namespace View {
 			cmd1.data = data;
 			cmd2.data = data;
 			cmd3.data = data;
-			let done = new Button('done', PageAttack.btnDone, new Util.Point(10,200));
+			this.buttons.push(cmd1,cmd2,cmd3);
+
+			// done
+			cursor.movey(lineHeight*3);
+			let done = new Button('done', PageAttack.btnDone, cursor);
 			done.visible = false;
-			this.buttons.push(cmd1,cmd2,cmd3,done);
+			this.buttons.push(done);
+
+			// leverage cash buttons
+			cursor.movex(-Button.size.x-5);
+			cursor.movey(lineHeight*2);
+			this.buttons.push(new Button('more',PageAttack.btnOwnCashMore,cursor));
+			this.buttons.push(new Button('less',PageAttack.btnOwnCashLess,cursor.shifted(Button.size.x+5,0)));
+			cursor.movey(lineHeight*2);
+			let rootMore = new Button('more',PageAttack.btnRootCashMore,cursor);
+			let rootLess = new Button('less',PageAttack.btnRootCashLess,cursor.shifted(Button.size.x+5,0));
+			this.buttons.push(rootMore,rootLess);
+			
+			// exec & cancel
+			cursor.movey(lineHeight*2);
+			this.buttons.push( new Button('execute', PageAttack.btnExecuteAttack, cursor) );
+			this.buttons.push( new Button('cancel', PageAttack.btnCancelAttack, cursor.shifted(Button.size.x+5,0)) );
+
 		}
+
+		public static btnOwnCashMore(btn: Button) {}
+		public static btnOwnCashLess(btn: Button) {}
+		public static btnRootCashMore(btn: Button) {}
+		public static btnRootCashLess(btn: Button) {}
+
 		public static reset() {
 			PageAttack.state = AttackState.setup;
 			PageAttack.roll = 0;
@@ -627,10 +653,11 @@ namespace View {
 			PageAttack.callback({command:'attackerDone'});
 			PageAttack.roll = Util.randomInt(1,6) + Util.randomInt(1,6);
 
-			// let needed = PageAttack.attackTotal - PageAttack.defenseTotal;
-			let needed = 12; // testing
+			let needed = PageAttack.attackTotal - PageAttack.defenseTotal;
+			if(needed > 10) { needed = 10; }
+			// let needed = 12; // testing
 
-			if(PageAttack.roll < needed) {
+			if(PageAttack.roll <= needed) {
 				PageAttack.state = AttackState.success;
 			}
 			else {
@@ -682,7 +709,7 @@ namespace View {
 		public static hoveredLink: Model.LinkTarget = null;
 		private static callback: (any) => any;
 		public static buttons: Button[] = [];
-		// TODO: handle own input events
+		// TODO: handle own input events -- faction view buttons
 		public static colors = {
 			headerFill: '#eee',
 		};

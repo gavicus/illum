@@ -38,6 +38,9 @@ namespace Util {
 		}
 		movex(d: number): void { this.x += d; }
 		movey(d: number): void { this.y += d; }
+		shifted(dx:number, dy:number) {
+			return new Point(this.x+dx, this.y+dy);
+		}
 		get negative(): Point {
 			return new Point ( -this.x, -this.y );
 		}

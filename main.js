@@ -43,6 +43,9 @@ var Util;
         };
         Point.prototype.movex = function (d) { this.x += d; };
         Point.prototype.movey = function (d) { this.y += d; };
+        Point.prototype.shifted = function (dx, dy) {
+            return new Point(this.x + dx, this.y + dy);
+        };
         Object.defineProperty(Point.prototype, "negative", {
             get: function () {
                 return new Point(-this.x, -this.y);
@@ -1021,10 +1024,8 @@ var View;
             PageAttack.callback = atkCallback;
             this.reset();
             var lineHeight = 22;
-            var cursor = new Util.Point(10, 150);
-            this.buttons.push(new Button('execute', PageAttack.btnExecuteAttack, cursor));
-            cursor.movey(lineHeight);
-            this.buttons.push(new Button('cancel', PageAttack.btnCancelAttack, cursor));
+            var cursor = new Util.Point(0, 0);
+            // attack type
             cursor.set(View.canvas.width - Button.size.x - 10, 10);
             var cmd1 = new Button('control', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
             cursor.movey(lineHeight);
@@ -1036,10 +1037,29 @@ var View;
             cmd1.data = data;
             cmd2.data = data;
             cmd3.data = data;
-            var done = new Button('done', PageAttack.btnDone, new Util.Point(10, 200));
+            this.buttons.push(cmd1, cmd2, cmd3);
+            // done
+            cursor.movey(lineHeight * 3);
+            var done = new Button('done', PageAttack.btnDone, cursor);
             done.visible = false;
-            this.buttons.push(cmd1, cmd2, cmd3, done);
+            this.buttons.push(done);
+            // leverage cash buttons
+            cursor.movex(-Button.size.x - 5);
+            cursor.movey(lineHeight * 2);
+            this.buttons.push(new Button('more', PageAttack.btnOwnCashMore, cursor));
+            this.buttons.push(new Button('less', PageAttack.btnOwnCashLess, cursor.shifted(Button.size.x + 5, 0)));
+            cursor.movey(lineHeight * 2);
+            this.buttons.push(new Button('more', PageAttack.btnRootCashMore, cursor));
+            this.buttons.push(new Button('less', PageAttack.btnRootCashLess, cursor.shifted(Button.size.x + 5, 0)));
+            // exec & cancel
+            cursor.movey(lineHeight * 2);
+            this.buttons.push(new Button('execute', PageAttack.btnExecuteAttack, cursor));
+            this.buttons.push(new Button('cancel', PageAttack.btnCancelAttack, cursor.shifted(Button.size.x + 5, 0)));
         };
+        PageAttack.btnOwnCashMore = function (btn) { };
+        PageAttack.btnOwnCashLess = function (btn) { };
+        PageAttack.btnRootCashMore = function (btn) { };
+        PageAttack.btnRootCashLess = function (btn) { };
         PageAttack.reset = function () {
             PageAttack.state = AttackState.setup;
             PageAttack.roll = 0;
@@ -1162,9 +1182,12 @@ var View;
             // TODO: spend cash used in attack
             PageAttack.callback({ command: 'attackerDone' });
             PageAttack.roll = Util.randomInt(1, 6) + Util.randomInt(1, 6);
-            // let needed = PageAttack.attackTotal - PageAttack.defenseTotal;
-            var needed = 12; // testing
-            if (PageAttack.roll < needed) {
+            var needed = PageAttack.attackTotal - PageAttack.defenseTotal;
+            if (needed > 10) {
+                needed = 10;
+            }
+            // let needed = 12; // testing
+            if (PageAttack.roll <= needed) {
                 PageAttack.state = AttackState.success;
             }
             else {
@@ -1349,7 +1372,7 @@ var View;
         };
         PageTable.hoveredLink = null;
         PageTable.buttons = [];
-        // TODO: handle own input events
+        // TODO: handle own input events -- faction view buttons
         PageTable.colors = {
             headerFill: '#eee',
         };

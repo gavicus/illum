@@ -25,6 +25,7 @@ namespace Control {
 			View.View.init(Control.viewCallback, Turn);
 			View.PageAttack.init(Control.attackCallback);
 			View.PageTable.init(Control.tableCallback);
+			View.View.drawPage();
 
 			this.mouse = {
 				down: false,
@@ -56,6 +57,7 @@ namespace Control {
 				case 'commandIsAttack': return Control.command == Command.attack;
 				case 'setDefender': Attack.setDefender(data.value); console.log('setDefender attacker',Attack.attacker);
 				case 'clearCommand': this.command = Command.none;
+				case 'btnEndTurn': return Control.btnEndTurn;
 			}
 		}
 
@@ -82,10 +84,6 @@ namespace Control {
 			View.View.drawPage();
 		}
 		public static controlSuccess() {
-
-			console.log('controlSuccess');
-			console.log('attacker',Attack.attacker);
-
 			Control.restoreTableState();
 			Attack.defender.faction = Attack.attacker.faction;
 			Attack.defender.cardLocation = Model.CardLocation.structure;
@@ -113,21 +111,6 @@ namespace Control {
 				View.View.dragFocus(delta);
 				View.View.drawPage();
 			}
-			// if (View.View.screenState === View.State.chooseLink) {
-			// 	let closest = null;
-			// 	let sqDist = 0;
-			// 	let minDist = Math.pow(View.View.cardLength, 2);
-			// 	for (let target of this.linkTargets) {
-			// 		let d2 = mouse.distSquared(target.point);
-			// 		if (d2 > minDist) { continue; }
-			// 		if (closest===null || d2 < sqDist){
-			// 			closest = target;
-			// 			sqDist = d2;
-			// 		}
-			// 	}
-			// 	this.hoveredLink = closest;
-			// 	View.View.drawLinkChoice(closest);
-			// }
 			if (View.View.screenState === View.State.detail) {
 				View.View.drawDetail(View.View.hoveredCard, mouse);
 			}
@@ -173,6 +156,10 @@ namespace Control {
 			Turn.factionShownIndex = Model.Model.factions.indexOf(button.data);
 			View.View.drawPage();
 		}
+		public static btnEndTurn(button: View.Button) {
+			Turn.nextTurn();
+			View.View.drawPage();
+		}
 	}
 
 	export class Attack {
@@ -208,6 +195,11 @@ namespace Control {
 			Turn.hasActed = [];
 			Turn.hasActedTwice = [];
 			Turn.faction.collectIncome();
+		}
+		static nextTurn(): void {
+			Turn.initTurn(
+				(Turn.factionIndex+1) % Model.Model.factions.length
+			);
 		}
 
 		static getHasActed(group: Model.Card): boolean {

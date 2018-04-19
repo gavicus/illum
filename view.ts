@@ -248,6 +248,8 @@ namespace View {
 		}
 	}
 
+	// TODO: move faction view buttons from View to PageView
+	
 	export class View {
 		static screenState: State;
 		static readonly arcRadius = 0.15;
@@ -679,6 +681,7 @@ namespace View {
 		public static linkTargets: Model.LinkTarget[];
 		public static hoveredLink: Model.LinkTarget = null;
 		private static callback: (any) => any;
+		public static buttons: Button[] = [];
 		// TODO: handle own input events
 		public static colors = {
 			headerFill: '#eee',
@@ -687,7 +690,19 @@ namespace View {
 		public static init(callback: (any) => any) {
 			PageTable.callback = callback;
 			PageTable.state = TableState.normal;
+			let cursor = new Util.Point(
+				View.canvas.width - Button.size.x,
+				View.canvas.height-PageTable.footerHeight
+			);
+			cursor.move(-10,10);
+			PageTable.buttons.push(new Button(
+				'end turn',
+				PageTable.callback({command:'btnEndTurn'}),
+				cursor
+			));
 		}
+
+		public static get footerHeight () { return View.cardLength * 1.4; }
 
 		public static draw(ctx: CanvasRenderingContext2D) {
 
@@ -709,12 +724,15 @@ namespace View {
 			}
 
 			// footer: faction selection, hand, buttons
-			let height = View.cardLength * 1.4;
+			let height = PageTable.footerHeight;
 			ctx.fillStyle = PageTable.colors.headerFill;
 			ctx.fillRect(0,View.canvas.height-height, View.canvas.width, height);
 			for (let btn of View.factionButtons) {
 				if (btn.data === View.turnObject.faction) { btn.font = View.boldFont; }
 				else { btn.font = View.font; }
+				btn.draw(ctx, btn === View.hoveredButton);
+			}
+			for (let btn of PageTable.buttons) {
 				btn.draw(ctx, btn === View.hoveredButton);
 			}
 
@@ -760,7 +778,7 @@ namespace View {
 					View.hoveredCard = hovered;
 					dirty = true;
 				}
-				let btn = View.getHoveredButton(View.factionButtons, mouse);
+				let btn = View.getHoveredButton(View.factionButtons.concat(PageTable.buttons), mouse);
 				if (btn !== View.hoveredButton) {
 					View.hoveredButton = btn;
 					dirty = true;

@@ -770,6 +770,7 @@ var View;
         return Button;
     }());
     View_1.Button = Button;
+    // TODO: move faction view buttons from View to PageView
     var View = /** @class */ (function () {
         function View() {
         }
@@ -1219,7 +1220,15 @@ var View;
         PageTable.init = function (callback) {
             PageTable.callback = callback;
             PageTable.state = TableState.normal;
+            var cursor = new Util.Point(View.canvas.width - Button.size.x, View.canvas.height - PageTable.footerHeight);
+            cursor.move(-10, 10);
+            PageTable.buttons.push(new Button('end turn', PageTable.callback({ command: 'btnEndTurn' }), cursor));
         };
+        Object.defineProperty(PageTable, "footerHeight", {
+            get: function () { return View.cardLength * 1.4; },
+            enumerable: true,
+            configurable: true
+        });
         PageTable.draw = function (ctx) {
             // structure
             var faction = View.turnObject.factionShown;
@@ -1238,7 +1247,7 @@ var View;
                 cursor.movex(View.cardLength);
             }
             // footer: faction selection, hand, buttons
-            var height = View.cardLength * 1.4;
+            var height = PageTable.footerHeight;
             ctx.fillStyle = PageTable.colors.headerFill;
             ctx.fillRect(0, View.canvas.height - height, View.canvas.width, height);
             for (var _a = 0, _b = View.factionButtons; _a < _b.length; _a++) {
@@ -1249,6 +1258,10 @@ var View;
                 else {
                     btn.font = View.font;
                 }
+                btn.draw(ctx, btn === View.hoveredButton);
+            }
+            for (var _c = 0, _d = PageTable.buttons; _c < _d.length; _c++) {
+                var btn = _d[_c];
                 btn.draw(ctx, btn === View.hoveredButton);
             }
             // hovered
@@ -1294,7 +1307,7 @@ var View;
                     View.hoveredCard = hovered;
                     dirty = true;
                 }
-                var btn = View.getHoveredButton(View.factionButtons, mouse);
+                var btn = View.getHoveredButton(View.factionButtons.concat(PageTable.buttons), mouse);
                 if (btn !== View.hoveredButton) {
                     View.hoveredButton = btn;
                     dirty = true;
@@ -1335,6 +1348,7 @@ var View;
             }
         };
         PageTable.hoveredLink = null;
+        PageTable.buttons = [];
         // TODO: handle own input events
         PageTable.colors = {
             headerFill: '#eee',
@@ -1366,6 +1380,7 @@ var Control;
             View.View.init(Control.viewCallback, Turn);
             View.PageAttack.init(Control.attackCallback);
             View.PageTable.init(Control.tableCallback);
+            View.View.drawPage();
             this.mouse = {
                 down: false,
                 drag: false,
@@ -1397,6 +1412,7 @@ var Control;
                     Attack.setDefender(data.value);
                     console.log('setDefender attacker', Attack.attacker);
                 case 'clearCommand': this.command = Command.none;
+                case 'btnEndTurn': return Control.btnEndTurn;
             }
         };
         Control.beginChooseLink = function (cardToPlace, cardSet) {
@@ -1422,8 +1438,6 @@ var Control;
             View.View.drawPage();
         };
         Control.controlSuccess = function () {
-            console.log('controlSuccess');
-            console.log('attacker', Attack.attacker);
             Control.restoreTableState();
             Attack.defender.faction = Attack.attacker.faction;
             Attack.defender.cardLocation = Model.CardLocation.structure;
@@ -1450,21 +1464,6 @@ var Control;
                 View.View.dragFocus(delta);
                 View.View.drawPage();
             }
-            // if (View.View.screenState === View.State.chooseLink) {
-            // 	let closest = null;
-            // 	let sqDist = 0;
-            // 	let minDist = Math.pow(View.View.cardLength, 2);
-            // 	for (let target of this.linkTargets) {
-            // 		let d2 = mouse.distSquared(target.point);
-            // 		if (d2 > minDist) { continue; }
-            // 		if (closest===null || d2 < sqDist){
-            // 			closest = target;
-            // 			sqDist = d2;
-            // 		}
-            // 	}
-            // 	this.hoveredLink = closest;
-            // 	View.View.drawLinkChoice(closest);
-            // }
             if (View.View.screenState === View.State.detail) {
                 View.View.drawDetail(View.View.hoveredCard, mouse);
             }
@@ -1509,6 +1508,10 @@ var Control;
         };
         Control.btnShowFaction = function (button) {
             Turn.factionShownIndex = Model.Model.factions.indexOf(button.data);
+            View.View.drawPage();
+        };
+        Control.btnEndTurn = function (button) {
+            Turn.nextTurn();
             View.View.drawPage();
         };
         Control.hoveredCard = null;
@@ -1559,6 +1562,9 @@ var Control;
             Turn.hasActed = [];
             Turn.hasActedTwice = [];
             Turn.faction.collectIncome();
+        };
+        Turn.nextTurn = function () {
+            Turn.initTurn((Turn.factionIndex + 1) % Model.Model.factions.length);
         };
         Turn.getHasActed = function (group) {
             return Turn.hasActed.indexOf(group) > -1;

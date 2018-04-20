@@ -454,14 +454,14 @@ namespace View {
 		// page events
 		public static onMouseMove(mouse: Util.Point, dragDelta: Util.Point = null) {
 			switch (this.screenState) {
-				case State.attackSetup: PageAttack.onMouseMove(mouse);
-				case State.table: PageTable.onMouseMove(mouse);
+				case State.attackSetup: PageAttack.onMouseMove(mouse); break;
+				case State.table: PageTable.onMouseMove(mouse); break;
 			}
 		}
 		public static onMouseClick(mouse: Util.Point) {
 			switch (this.screenState) {
-				case State.attackSetup: PageAttack.onMouseClick(mouse);
-				case State.table: PageTable.onMouseClick(mouse);
+				case State.attackSetup: PageAttack.onMouseClick(mouse); break;
+				case State.table: PageTable.onMouseClick(mouse); break;
 			}
 		}
 
@@ -720,12 +720,18 @@ namespace View {
 			View.drawPage();
 		}
 		public static btnDone(button: Button) {
+
+			console.log('btnDone');
+			console.log('attack type',PageAttack.attackType);
+			console.log('PageAttack.state',AttackState[PageAttack.state]);
+
 			PageAttack.callback({command:'attackerDone'});
 			View.screenState = State.table;
 			if (PageAttack.state === AttackState.failure) {
 				PageAttack.callback({command:'cancelAttack'});
 			}
 			else if (PageAttack.attackType === 'control') {
+				console.log('btnDone calling controlSuccess because attack state is',AttackState[PageAttack.state]);
 				PageAttack.callback({command:'controlSuccess'});
 			}
 			else if (PageAttack.attackType === 'neutralize') {
@@ -849,6 +855,12 @@ namespace View {
 			for (let btn of PageTable.buttons) {
 				btn.draw(ctx, btn === View.hoveredButton);
 			}
+
+			// DEBUG: draw page state above footer
+			cursor.set(10,View.canvas.height - height - 10);
+			ctx.font = View.font;
+			ctx.textAlign = 'left';
+			ctx.fillText('PageTable state: '+TableState[PageTable.state],cursor.x,cursor.y);
 
 			// hovered
 			if (PageTable.state === TableState.chooseLink){

@@ -278,11 +278,6 @@ namespace Model {
 			return card;
 		}
 		static getLinkTargets(movingCard: Card, cardSet: Card[] = Deck.structureCards): LinkTarget[] {
-
-			console.log('Model.getLinkTargets');
-			console.log('movingCard',movingCard);
-			console.log('cardSet',cardSet);
-
 			let faction = movingCard.faction;
 			let targets = [];
 			for (let card of cardSet) {
@@ -294,9 +289,6 @@ namespace Model {
 					targets.push(new LinkTarget(card.shape.links[index], card, index));
 				}
 			}
-
-			console.log('targets',targets);
-
 			return targets;
 		}
 

@@ -403,9 +403,6 @@ var Model;
             return card;
         }
         static getLinkTargets(movingCard, cardSet = Deck.structureCards) {
-            console.log('Model.getLinkTargets');
-            console.log('movingCard', movingCard);
-            console.log('cardSet', cardSet);
             let faction = movingCard.faction;
             let targets = [];
             for (let card of cardSet) {
@@ -425,7 +422,6 @@ var Model;
                     targets.push(new LinkTarget(card.shape.links[index], card, index));
                 }
             }
-            console.log('targets', targets);
             return targets;
         }
         static initFactions(quantity) {
@@ -908,14 +904,22 @@ var View;
         // page events
         static onMouseMove(mouse, dragDelta = null) {
             switch (this.screenState) {
-                case State.attackSetup: PageAttack.onMouseMove(mouse);
-                case State.table: PageTable.onMouseMove(mouse);
+                case State.attackSetup:
+                    PageAttack.onMouseMove(mouse);
+                    break;
+                case State.table:
+                    PageTable.onMouseMove(mouse);
+                    break;
             }
         }
         static onMouseClick(mouse) {
             switch (this.screenState) {
-                case State.attackSetup: PageAttack.onMouseClick(mouse);
-                case State.table: PageTable.onMouseClick(mouse);
+                case State.attackSetup:
+                    PageAttack.onMouseClick(mouse);
+                    break;
+                case State.table:
+                    PageTable.onMouseClick(mouse);
+                    break;
             }
         }
         // draw helper functions
@@ -1165,12 +1169,16 @@ var View;
             View.drawPage();
         }
         static btnDone(button) {
+            console.log('btnDone');
+            console.log('attack type', PageAttack.attackType);
+            console.log('PageAttack.state', AttackState[PageAttack.state]);
             PageAttack.callback({ command: 'attackerDone' });
             View.screenState = State.table;
             if (PageAttack.state === AttackState.failure) {
                 PageAttack.callback({ command: 'cancelAttack' });
             }
             else if (PageAttack.attackType === 'control') {
+                console.log('btnDone calling controlSuccess because attack state is', AttackState[PageAttack.state]);
                 PageAttack.callback({ command: 'controlSuccess' });
             }
             else if (PageAttack.attackType === 'neutralize') {
@@ -1280,6 +1288,11 @@ var View;
             for (let btn of PageTable.buttons) {
                 btn.draw(ctx, btn === View.hoveredButton);
             }
+            // DEBUG: draw page state above footer
+            cursor.set(10, View.canvas.height - height - 10);
+            ctx.font = View.font;
+            ctx.textAlign = 'left';
+            ctx.fillText('PageTable state: ' + TableState[PageTable.state], cursor.x, cursor.y);
             // hovered
             if (PageTable.state === TableState.chooseLink) {
             }
@@ -1409,11 +1422,21 @@ var Control;
         }
         static attackCallback(data) {
             switch (data.command) {
-                case 'attackerDone': Turn.setHasActed(Attack.attacker);
-                case 'cancelAttack': Control.cancelAttack();
-                case 'controlSuccess': Control.controlSuccess();
-                case 'neutralizeSuccess': Control.neutralizeSuccess();
-                case 'destroySuccess': Control.destroySuccess();
+                case 'attackerDone':
+                    Turn.setHasActed(Attack.attacker);
+                    break;
+                case 'cancelAttack':
+                    Control.cancelAttack();
+                    break;
+                case 'controlSuccess':
+                    Control.controlSuccess();
+                    break;
+                case 'neutralizeSuccess':
+                    Control.neutralizeSuccess();
+                    break;
+                case 'destroySuccess':
+                    Control.destroySuccess();
+                    break;
                 case 'getDefender': return Attack.defender;
                 case 'getAttacker': return Attack.attacker;
             }
@@ -1423,12 +1446,15 @@ var Control;
                 case 'commandIsAttack': return Control.command == Command.attack;
                 case 'setDefender':
                     Attack.setDefender(data.value);
-                    console.log('setDefender attacker', Attack.attacker);
-                case 'clearCommand': this.command = Command.none;
+                    break;
+                case 'clearCommand':
+                    this.command = Command.none;
+                    break;
                 case 'btnEndTurn': return Control.btnEndTurn;
             }
         }
         static beginChooseLink(cardToPlace, cardSet = Model.Deck.structureCards) {
+            console.log('beginChooseLink');
             // TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
             View.View.screenState = View.State.table;
             View.PageTable.state = View.TableState.chooseLink;
@@ -1450,6 +1476,8 @@ var Control;
             View.View.drawPage();
         }
         static controlSuccess() {
+            console.log('public static controlSuccess');
+            Control.command = Command.none;
             Control.restoreTableState();
             Attack.defender.faction = Attack.attacker.faction;
             Attack.defender.cardLocation = Model.CardLocation.structure;

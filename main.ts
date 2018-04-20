@@ -43,11 +43,11 @@ namespace Control {
 		}
 		public static attackCallback(data): any {
 			switch(data.command) {
-				case 'attackerDone': Turn.setHasActed(Attack.attacker);
-				case 'cancelAttack': Control.cancelAttack();
-				case 'controlSuccess': Control.controlSuccess();
-				case 'neutralizeSuccess': Control.neutralizeSuccess();
-				case 'destroySuccess': Control.destroySuccess();
+				case 'attackerDone': Turn.setHasActed(Attack.attacker); break;
+				case 'cancelAttack': Control.cancelAttack(); break;
+				case 'controlSuccess': Control.controlSuccess(); break;
+				case 'neutralizeSuccess': Control.neutralizeSuccess(); break;
+				case 'destroySuccess': Control.destroySuccess(); break;
 				case 'getDefender': return Attack.defender;
 				case 'getAttacker': return Attack.attacker;
 			}
@@ -55,13 +55,16 @@ namespace Control {
 		public static tableCallback(data): any {
 			switch(data.command) {
 				case 'commandIsAttack': return Control.command == Command.attack;
-				case 'setDefender': Attack.setDefender(data.value); console.log('setDefender attacker',Attack.attacker);
-				case 'clearCommand': this.command = Command.none;
+				case 'setDefender': Attack.setDefender(data.value); break;
+				case 'clearCommand': this.command = Command.none; break;
 				case 'btnEndTurn': return Control.btnEndTurn;
 			}
 		}
 
 		public static beginChooseLink(cardToPlace: Model.Card, cardSet: Model.Card[] = Model.Deck.structureCards){
+
+			console.log('beginChooseLink');
+
 			// TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
 			View.View.screenState = View.State.table;
 			View.PageTable.state = View.TableState.chooseLink;
@@ -77,13 +80,16 @@ namespace Control {
 			// Attack.clear();
 			this.command = Command.none;
 		}
-		
 		public static restoreTableState() {
 			View.View.screenState = View.State.table;
 			Turn.factionShownIndex = Turn.factionIndex;
 			View.View.drawPage();
 		}
 		public static controlSuccess() {
+
+			console.log('public static controlSuccess');
+
+			Control.command = Command.none;
 			Control.restoreTableState();
 			Attack.defender.faction = Attack.attacker.faction;
 			Attack.defender.cardLocation = Model.CardLocation.structure;

@@ -149,6 +149,13 @@ namespace Model {
 			}
 			return false;
 		}
+		getRoot(): Card {
+			let cursor: Card = this;
+			while (cursor.cardType !== CardType.root) {
+				cursor = cursor.parent;
+			}
+			return cursor;
+		}
 
 		static init(text: string): Card {
 			let fields = text.split("|");

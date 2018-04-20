@@ -275,6 +275,13 @@ var Model;
             }
             return false;
         }
+        getRoot() {
+            let cursor = this;
+            while (cursor.cardType !== CardType.root) {
+                cursor = cursor.parent;
+            }
+            return cursor;
+        }
         static init(text) {
             let fields = text.split("|");
             let [type, name, description, atk, def, links, income, alignments, objective] = text.split("|");
@@ -658,7 +665,6 @@ var View;
             this.textAlign = 'center';
             Button.size = new Util.Point(80, 18);
             this.rect = new Util.Rectangle(ulCorner.x, ulCorner.y, Button.size.x, Button.size.y);
-            this.textPoint = this.rect.center;
         }
         static getButton(buttonSet, id) {
             return buttonSet.find((btn) => btn.id === id);
@@ -670,6 +676,16 @@ var View;
                 }
             }
             return null;
+        }
+        get textPoint() {
+            if (this.textAlign === 'center') {
+                return this.rect.center;
+            }
+            else {
+                let x = this.rect.upperLeft.x;
+                let y = this.rect.upperLeft.y + Button.size.y / 3;
+                return new Util.Point(x, y);
+            }
         }
         draw(c, hovered) {
             if (!this.visible) {
@@ -704,6 +720,10 @@ var View;
             this.rect.upperLeft.copy(point);
             this.rect.lowerRight.copy(point.plus(dims));
         }
+        sety(y) {
+            this.rect.upperLeft.y = y;
+            this.rect.lowerRight.y = y + Button.size.y;
+        }
     }
     Button.colors = {
         fill: '#efefef',
@@ -727,20 +747,6 @@ var View;
                 new Button('move', View.callback('btnMoveGroup'), new Util.Point(20, 100)),
                 new Button('attack', View.callback('btnAttack'), new Util.Point(100, 100)),
             ];
-            // faction selection buttons
-            View.factionButtons = [];
-            let cursor = new Util.Point(10, View.canvas.height - 10);
-            for (let i = Model.Model.factions.length - 1; i >= 0; --i) {
-                let faction = Model.Model.factions[i];
-                let btn = new Button(faction.root.name, View.callback('btnShowFaction'), cursor.clone());
-                btn.data = faction;
-                btn.outline = false;
-                btn.textPoint = cursor.clone();
-                btn.textAlign = 'left';
-                btn.data = faction;
-                View.factionButtons.push(btn);
-                cursor.movey(-14);
-            }
             this.orientRootCards(Model.Model.factions);
             this.drawPage();
         }
@@ -970,24 +976,22 @@ var View;
             // leverage cash buttons
             cursor.movex(-Button.size.x - 5);
             cursor.movey(lineHeight * 2);
-            this.buttons.push(new Button('more', PageAttack.btnOwnCashMore, cursor));
-            this.buttons.push(new Button('less', PageAttack.btnOwnCashLess, cursor.shifted(Button.size.x + 5, 0)));
+            this.buttons.push(new Button('more', PageAttack.btnOwnCashMore, cursor, 'own_cash_more'));
+            this.buttons.push(new Button('less', PageAttack.btnOwnCashLess, cursor.shifted(Button.size.x + 5, 0), 'own_cash_less'));
             cursor.movey(lineHeight * 2);
-            let rootMore = new Button('more', PageAttack.btnRootCashMore, cursor);
-            let rootLess = new Button('less', PageAttack.btnRootCashLess, cursor.shifted(Button.size.x + 5, 0));
+            let rootMore = new Button('more', PageAttack.btnRootCashMore, cursor, 'root_cash_more');
+            let rootLess = new Button('less', PageAttack.btnRootCashLess, cursor.shifted(Button.size.x + 5, 0), 'root_cash_less');
             this.buttons.push(rootMore, rootLess);
             // exec & cancel
             cursor.movey(lineHeight * 2);
-            this.buttons.push(new Button('execute', PageAttack.btnExecuteAttack, cursor));
-            this.buttons.push(new Button('cancel', PageAttack.btnCancelAttack, cursor.shifted(Button.size.x + 5, 0)));
+            this.buttons.push(new Button('execute', PageAttack.btnExecuteAttack, cursor, 'execute'));
+            this.buttons.push(new Button('cancel', PageAttack.btnCancelAttack, cursor.shifted(Button.size.x + 5, 0), 'cancel'));
         }
-        static btnOwnCashMore(btn) { }
-        static btnOwnCashLess(btn) { }
-        static btnRootCashMore(btn) { }
-        static btnRootCashLess(btn) { }
         static reset() {
             PageAttack.state = AttackState.setup;
             PageAttack.roll = 0;
+            PageAttack.attackerCash = 0;
+            PageAttack.rootCash = 0;
             for (let btn of PageAttack.buttons) {
                 if (btn.caption === 'done') {
                     btn.visible = false;
@@ -1012,10 +1016,6 @@ var View;
             let lineHeight = 15;
             let attacker = PageAttack.callback({ command: 'getAttacker' });
             let defender = PageAttack.callback({ command: 'getDefender' });
-            let defenseAttribute = defender.defense;
-            if (PageAttack.attackType === 'destroy') {
-                defenseAttribute = defender.attack;
-            }
             // TODO: compute target proximity to root card
             // TODO: allow use of cash
             // TODO: disallow control attacks if attacker has no open out links
@@ -1033,36 +1033,23 @@ var View;
             atkLine += ' (' + attacker.alignments + ')';
             ctx.fillText(atkLine, cursor.x, cursor.y);
             cursor.movey(lineHeight);
-            let defLine = 'defender: ' + defender.name + ' (' + defenseAttribute + ')';
+            let defLine = 'defender: ' + defender.name + ' (' + PageAttack.defenseTotal + ')';
             defLine += ' (' + defender.alignments + ')';
             ctx.fillText(defLine, cursor.x, cursor.y);
-            // compute totals
-            let comparison = Model.Alignment.compare(attacker.alignments, defender.alignments);
-            let alignBonus = 0;
-            if (PageAttack.attackType === 'control') {
-                alignBonus = comparison.same * 4 - comparison.opposite * 4;
-            }
-            else if (PageAttack.attackType === 'neutralize') {
-                alignBonus = 6 + comparison.same * 4 - comparison.opposite * 4;
-            }
-            else if (PageAttack.attackType === 'destroy') {
-                alignBonus = comparison.opposite * 4 - comparison.same * 4;
-            }
-            let totalAtk = attacker.attack + alignBonus;
-            let totalDef = defenseAttribute;
-            // show totals
+            // totals
             cursor.movey(lineHeight * 2);
             let cursor2 = cursor.clone();
-            ctx.fillText('total attack: ' + totalAtk, cursor.x, cursor.y);
+            ctx.fillText('total attack: ' + PageAttack.attackTotal, cursor.x, cursor.y);
             cursor.movey(lineHeight);
-            ctx.fillText('total defense: ' + totalDef, cursor.x, cursor.y);
+            ctx.fillText('total defense: ' + PageAttack.defenseTotal, cursor.x, cursor.y);
             cursor.movey(lineHeight);
-            ctx.fillText('roll needed: ' + (totalAtk - totalDef) + ' or less', cursor.x, cursor.y);
+            ctx.fillText('roll needed: ' + (PageAttack.attackTotal - PageAttack.defenseTotal) + ' or less', cursor.x, cursor.y);
             // show bonuses
             cursor2.movex(120);
-            ctx.fillText('alignment bonus: ' + alignBonus, cursor2.x, cursor2.y);
+            ctx.fillText('alignment bonus: ' + PageAttack.alignmentBonus, cursor2.x, cursor2.y);
             cursor2.movey(lineHeight);
             ctx.fillText('illuminati defense: ' + 0, cursor2.x, cursor2.y); // TODO
+            // results
             cursor.movey(lineHeight * 2);
             if (PageAttack.roll > 0) {
                 ctx.fillText('roll: ' + PageAttack.roll, cursor.x, cursor.y);
@@ -1074,14 +1061,72 @@ var View;
                     ctx.fillText('failure!', cursor.x, cursor.y);
                 }
             }
+            // cash
+            cursor.set(View.canvas.width - Button.size.x * 2 - 15, 150);
+            ctx.fillText('leverage cash to improve odds', cursor.x, cursor.y);
+            cursor.movey(lineHeight);
+            ctx.fillText('attacker cash: ' + attacker.cash + 'MB', cursor.x, cursor.y);
+            cursor.movey(lineHeight);
+            ctx.fillText('leveraged: ' + PageAttack.attackerCash + 'MB', cursor.x, cursor.y);
+            cursor.movey(lineHeight / 2);
+            Button.getButton(PageAttack.buttons, 'own_cash_more').sety(cursor.y);
+            Button.getButton(PageAttack.buttons, 'own_cash_less').sety(cursor.y);
+            let root_cash_more = Button.getButton(PageAttack.buttons, 'root_cash_more');
+            let root_cash_less = Button.getButton(PageAttack.buttons, 'root_cash_less');
+            if (attacker.cardType === Model.CardType.root) {
+                root_cash_more.visible = false;
+                root_cash_less.visible = false;
+            }
+            else {
+                root_cash_more.visible = true;
+                root_cash_less.visible = true;
+                let root = attacker.getRoot();
+                cursor.movey(lineHeight * 2);
+                ctx.fillText('root cash: ' + root.cash + 'MB', cursor.x, cursor.y);
+                cursor.movey(lineHeight);
+                ctx.fillText('leveraged: ' + PageAttack.rootCash + 'MB', cursor.x, cursor.y);
+                cursor.movey(lineHeight / 2);
+                root_cash_more.sety(cursor.y);
+                root_cash_less.sety(cursor.y);
+            }
+            // execute and cancel
+            cursor.movey(lineHeight * 2);
+            Button.getButton(PageAttack.buttons, 'execute').sety(cursor.y);
+            Button.getButton(PageAttack.buttons, 'cancel').sety(cursor.y);
             // buttons
             for (let btn of this.buttons) {
                 btn.draw(ctx, btn === this.hoveredButton);
             }
         }
         // accessors
-        static get attackTotal() { return PageAttack.callback({ command: 'getAttacker' }).attack; }
-        static get defenseTotal() { return PageAttack.callback({ command: 'getDefender' }).defense; }
+        static get alignmentBonus() {
+            let attacker = PageAttack.callback({ command: 'getAttacker' });
+            let defender = PageAttack.callback({ command: 'getDefender' });
+            let comparison = Model.Alignment.compare(attacker.alignments, defender.alignments);
+            let alignBonus = 0;
+            if (PageAttack.attackType === 'control') {
+                alignBonus = comparison.same * 4 - comparison.opposite * 4;
+            }
+            else if (PageAttack.attackType === 'neutralize') {
+                alignBonus = 6 + comparison.same * 4 - comparison.opposite * 4;
+            }
+            else if (PageAttack.attackType === 'destroy') {
+                alignBonus = comparison.opposite * 4 - comparison.same * 4;
+            }
+            return alignBonus;
+        }
+        static get attackTotal() {
+            let attacker = PageAttack.callback({ command: 'getAttacker' });
+            return attacker.attack + PageAttack.alignmentBonus + PageAttack.attackerCash + PageAttack.rootCash;
+        }
+        static get defenseTotal() {
+            let defender = PageAttack.callback({ command: 'getDefender' });
+            let defenseAttribute = defender.defense;
+            if (PageAttack.attackType === 'destroy') {
+                defenseAttribute = defender.attack;
+            }
+            return defenseAttribute;
+        }
         // button events
         static btnAtkType(button) {
             for (let btn of button.data.group) {
@@ -1092,20 +1137,24 @@ var View;
             View.drawPage();
         }
         static btnExecuteAttack(button) {
-            // TODO: spend cash used in attack
-            PageAttack.callback({ command: 'attackerDone' });
+            // make the roll
             PageAttack.roll = Util.randomInt(1, 6) + Util.randomInt(1, 6);
+            // determine success
             let needed = PageAttack.attackTotal - PageAttack.defenseTotal;
             if (needed > 10) {
                 needed = 10;
             }
-            // let needed = 12; // testing
             if (PageAttack.roll <= needed) {
                 PageAttack.state = AttackState.success;
             }
             else {
                 PageAttack.state = AttackState.failure;
             }
+            // spend cash used in attack
+            let attacker = PageAttack.callback({ command: 'getAttacker' });
+            attacker.cash -= PageAttack.attackerCash;
+            let root = attacker.getRoot();
+            root.cash -= PageAttack.rootCash;
             PageAttack.initDoneState();
             View.drawPage();
         }
@@ -1116,6 +1165,7 @@ var View;
             View.drawPage();
         }
         static btnDone(button) {
+            PageAttack.callback({ command: 'attackerDone' });
             View.screenState = State.table;
             if (PageAttack.state === AttackState.failure) {
                 PageAttack.callback({ command: 'cancelAttack' });
@@ -1130,6 +1180,33 @@ var View;
                 PageAttack.callback({ command: 'destroySuccess' });
             }
             PageAttack.reset();
+            View.drawPage();
+        }
+        static btnOwnCashMore(btn) {
+            let attacker = PageAttack.callback({ command: 'getAttacker' });
+            if (PageAttack.attackerCash < attacker.cash) {
+                ++PageAttack.attackerCash;
+            }
+            View.drawPage();
+        }
+        static btnOwnCashLess(btn) {
+            if (PageAttack.attackerCash > 0) {
+                --PageAttack.attackerCash;
+            }
+            View.drawPage();
+        }
+        static btnRootCashMore(btn) {
+            let attacker = PageAttack.callback({ command: 'getAttacker' });
+            let root = attacker.getRoot();
+            if (PageAttack.rootCash < root.cash) {
+                ++PageAttack.rootCash;
+            }
+            View.drawPage();
+        }
+        static btnRootCashLess(btn) {
+            if (PageAttack.rootCash > 0) {
+                --PageAttack.rootCash;
+            }
             View.drawPage();
         }
         // mouse event
@@ -1147,6 +1224,8 @@ var View;
     PageAttack.buttons = [];
     PageAttack.hoveredButton = null;
     PageAttack.attackType = 'control';
+    PageAttack.attackerCash = 0;
+    PageAttack.rootCash = 0;
     PageAttack.roll = 0;
     View_1.PageAttack = PageAttack;
     class PageTable {
@@ -1156,13 +1235,24 @@ var View;
             let cursor = new Util.Point(View.canvas.width - Button.size.x, View.canvas.height - PageTable.footerHeight);
             cursor.move(-10, 10);
             PageTable.buttons.push(new Button('end turn', PageTable.callback({ command: 'btnEndTurn' }), cursor));
+            // faction selection buttons
+            cursor.set(10, View.canvas.height - 15);
+            for (let i = Model.Model.factions.length - 1; i >= 0; --i) {
+                let faction = Model.Model.factions[i];
+                let btn = new Button(faction.root.name, View.callback('btnShowFaction'), cursor.clone());
+                btn.data = faction;
+                btn.outline = false;
+                btn.textAlign = 'left';
+                btn.data = faction;
+                PageTable.factionButtons.push(btn);
+                cursor.movey(-14);
+            }
         }
         static get footerHeight() { return View.cardLength * 1.4; }
         static draw(ctx) {
             // structure
             let faction = View.turnObject.factionShown;
             CardView.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
-            // View.drawCard(faction.root);
             CardView.draw(ctx, faction.root);
             // header: uncontrolled
             ctx.fillStyle = PageTable.colors.headerFill;
@@ -1178,7 +1268,7 @@ var View;
             let height = PageTable.footerHeight;
             ctx.fillStyle = PageTable.colors.headerFill;
             ctx.fillRect(0, View.canvas.height - height, View.canvas.width, height);
-            for (let btn of View.factionButtons) {
+            for (let btn of PageTable.factionButtons) {
                 if (btn.data === View.turnObject.faction) {
                     btn.font = View.boldFont;
                 }
@@ -1232,7 +1322,7 @@ var View;
                     View.hoveredCard = hovered;
                     dirty = true;
                 }
-                let btn = View.getHoveredButton(View.factionButtons.concat(PageTable.buttons), mouse);
+                let btn = View.getHoveredButton(PageTable.factionButtons.concat(PageTable.buttons), mouse);
                 if (btn !== View.hoveredButton) {
                     View.hoveredButton = btn;
                     dirty = true;
@@ -1275,6 +1365,7 @@ var View;
     }
     PageTable.hoveredLink = null;
     PageTable.buttons = [];
+    PageTable.factionButtons = [];
     // TODO: handle own input events -- faction view buttons
     PageTable.colors = {
         headerFill: '#eee',

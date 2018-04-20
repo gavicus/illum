@@ -25,6 +25,7 @@ namespace Control {
 			View.View.init(Control.viewCallback, Turn);
 			View.PageAttack.init(Control.attackCallback);
 			View.PageTable.init(Control.tableCallback);
+			View.PageDetail.init(Control.detailCallback);
 			View.View.drawPage();
 
 			this.mouse = {
@@ -58,6 +59,15 @@ namespace Control {
 				case 'setDefender': Attack.setDefender(data.value); break;
 				case 'clearCommand': this.command = Command.none; break;
 				case 'btnEndTurn': return Control.btnEndTurn;
+			}
+		}
+		public static detailCallback(data): any {
+
+			console.log('detailCallback',data);
+
+			switch (data.command) {
+				case 'btnMoveGroup': return Control.btnMoveGroup;
+				case 'btnAttack': return Control.btnAttack;
 			}
 		}
 
@@ -117,10 +127,7 @@ namespace Control {
 				View.View.dragFocus(delta);
 				View.View.drawPage();
 			}
-			if (View.View.screenState === View.State.detail) {
-				View.View.drawDetail(View.View.hoveredCard, mouse);
-			}
-			else { View.View.onMouseMove(mouse); }
+			View.View.onMouseMove(mouse);
 			this.mouse.last = mouse;
 		}
 		public static onMouseOut(event: MouseEvent){
@@ -131,20 +138,8 @@ namespace Control {
 			Control.mouse.drag = false;
 			let mouse = new Util.Point(event.offsetX, event.offsetY);
 			
-			if (View.View.screenState === View.State.detail) {
-				// TODO: buttons, options, etc.
-				if (View.View.hoveredButton) {
-					View.View.hoveredButton.callback(View.View.hoveredButton);
-				}
-				else {
-					View.View.screenState = View.State.table;
-					View.View.drawPage();
-				}
-			}
-			else {
-				if(this.mouse.drag){}
-				else { View.View.onMouseClick(mouse); }
-			}
+			if(this.mouse.drag){}
+			else { View.View.onMouseClick(mouse); }
 
 			this.mouse.down = false;
 			this.mouse.drag = false;
@@ -194,18 +189,31 @@ namespace Control {
 		static factionShownIndex: number;
 		static hasActed: Model.Card[];
 		static hasActedTwice: Model.Card[];
+		static actionsTaken = 0;
 
 		static initTurn(factionIndex: number): void {
 			Turn.factionIndex = factionIndex;
 			Turn.factionShownIndex = factionIndex;
 			Turn.hasActed = [];
 			Turn.hasActedTwice = [];
+			Turn.actionsTaken = 0;
 			Turn.faction.collectIncome();
 		}
 		static nextTurn(): void {
 			Turn.initTurn(
 				(Turn.factionIndex+1) % Model.Model.factions.length
 			);
+			// should be at least 2 open cards
+			while (Model.Deck.openCards.length < 2) {
+				let card = Model.Deck.drawGroup();
+				if (card) {
+					card.cardLocation = Model.CardLocation.open;
+				}
+				else { break; }
+			}
+			// then draw a card
+			Model.Deck.drawPlot().cardLocation = Model.CardLocation.open;
+			// TODO: if the card is a special, put it in the player's "hand"
 		}
 
 		static getHasActed(group: Model.Card): boolean {
@@ -218,6 +226,7 @@ namespace Control {
 
 		static setHasActed(group: Model.Card): void {
 			Turn.hasActed.push(group);
+			Turn.actionsTaken++;
 		}
 
 		static setHasActedTwice(group: Model.Card): void {

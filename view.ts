@@ -188,7 +188,7 @@ namespace View {
 	}
 
 	export class Button {
-		public static size: Util.Point;
+		public static size = new Util.Point(80,18);
 		public rect: Util.Rectangle;
 		public font = View.boldFont;
 		public outline = true;
@@ -209,7 +209,6 @@ namespace View {
 			public caption: string, public callback: (button: View.Button) => void,
 			private ulCorner: Util.Point, public id: string=''
 		) {
-			Button.size = new Util.Point(80,18);
 			this.rect = new Util.Rectangle(ulCorner.x, ulCorner.y, Button.size.x, Button.size.y);
 		}
 		
@@ -273,7 +272,6 @@ namespace View {
 		static canvas: HTMLCanvasElement;
 		static context: CanvasRenderingContext2D;
 		static cardLength = 50; // changes with zoom
-		static detailButtons: Button[];
 		static hoveredButton: Button = null;
 		static hoveredCard: Model.Card = null;
 		static focus: Util.Point;
@@ -294,130 +292,16 @@ namespace View {
 			View.canvas = <HTMLCanvasElement>document.getElementById('canvas');
 			View.context = View.canvas.getContext('2d');
 			View.focus = new Util.Point(View.canvas.width/2, View.canvas.height/2);
-			View.detailButtons = [
-				new Button('move', View.callback('btnMoveGroup'), new Util.Point(20, 100)),
-				new Button('attack', View.callback('btnAttack'), new Util.Point(100,100)),
-			];
+			// View.detailButtons = [
+			// 	new Button('move', View.callback('btnMoveGroup'), new Util.Point(20, 100)),
+			// 	new Button('attack', View.callback('btnAttack'), new Util.Point(100,100)),
+			// ];
 			this.orientRootCards(Model.Model.factions);
 
 			this.drawPage();
 		}
 		public static dragFocus(delta: Util.Point) {
 			View.focus.move(delta.x, delta.y);
-		}
-		
-		// public static draw(){
-		// 	this.clear();
-
-		// 	// structure
-		// 	let faction = View.turnObject.factionShown;
-		// 	CardView.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
-		// 	// View.drawCard(faction.root);
-		// 	CardView.draw(View.context, faction.root);
-
-		// 	// header: uncontrolled
-		// 	View.context.fillStyle = View.colors.screen.headerFill;
-		// 	View.context.fillRect(0,0, View.canvas.width, View.cardLength * 1.4);
-		// 	let open = Model.Deck.openCards;
-		// 	let cursor = new Util.Point(View.cardLength/2, 10);
-		// 	for (let card of open) {
-		// 		CardView.orient(card, cursor, 1);
-		// 		CardView.draw(View.context, card);
-		// 		cursor.movex(View.cardLength);
-		// 	}
-
-		// 	// footer: faction selection, hand, buttons
-		// 	let height = View.cardLength * 1.4;
-		// 	View.context.fillStyle = View.colors.screen.headerFill;
-		// 	View.context.fillRect(0,View.canvas.height-height, View.canvas.width, height);
-		// 	for (let btn of View.factionButtons) {
-		// 		if (btn.data === View.turnObject.faction) { btn.font = View.boldFont; }
-		// 		else { btn.font = View.font; }
-		// 		btn.draw(View.context, btn === View.hoveredButton);
-		// 	}
-
-		// 	// hovered
-		// 	if(View.hoveredCard){
-		// 		CardView.drawHovered(View.hoveredCard,View.context);
-		// 	}
-
-		// }
-
-		public static drawDetail(card: Model.Card, mouse: Util.Point = null) {
-
-			// TODO:
-			// long description lines must wrap (see IRS)
-			// IRS income shows as NaN -- make exceptions for special cases
-
-			View.clear();
-			let gutter = 20;
-			let lineHeight = 16;
-			let cursor = new Util.Point(gutter, gutter);
-			// name
-			View.context.font = View.boldFont;
-			View.context.fillStyle = CardView.colors.card.text; // TODO: make page object and keep own colors
-			View.context.textAlign = 'left';
-			View.context.textBaseline = 'alphabetic';
-			let cardName = card.name;
-			if (card.cardType === Model.CardType.root) {
-				cardName = 'The ' + card.name;
-			}
-			View.context.fillText(cardName, cursor.x, cursor.y);
-			cursor.movey(lineHeight);
-			View.context.fillText('(' + card.alignments + ')', cursor.x, cursor.y);
-			
-			// numbers
-			cursor.movey(lineHeight);
-			View.context.font = View.font;
-			let atk = '' + card.attack;
-			if(card.aid > 0) { atk += '/' + card.aid; }
-			let def = card.defense;
-			View.context.fillText('attack: ' + atk + '  defense: ' + def, cursor.x, cursor.y);
-			cursor.movey(lineHeight);
-			View.context.fillText('income: '+card.income, cursor.x, cursor.y);
-			// description
-			cursor.movey(lineHeight);
-			View.context.fillText(card.description, cursor.x, cursor.y);
-			// children
-			cursor.movey(lineHeight*2);
-			View.context.fillText('children', cursor.x, cursor.y);
-			cursor.movey(lineHeight);
-			View.context.font = View.font;
-			let children = card.children.map((child)=>{return child.name}).join(', ') || 'none';
-			View.context.fillText(children, cursor.x, cursor.y);
-
-			// TODO: buttons: move, attack, etc.
-			cursor.movey(lineHeight*2);
-			View.hoveredButton = null;
-			for (let btn of View.detailButtons) {
-				if (btn.caption === 'move') {
-					if (card.cardType === Model.CardType.root) { continue; } // make root immobile
-					if (card.cardLocation === Model.CardLocation.open) { continue; } // make uncontrolled cards immobile
-				}
-				else if (btn.caption === 'attack') {
-					if (card.cardLocation !== Model.CardLocation.structure) { continue; }
-					if (card.faction !== View.turnObject.faction) { continue; }
-					// TODO: allow for groups that can act twice
-					if (View.turnObject.getHasActed(card)) { continue; }
-				}
-				btn.moveTo(cursor);
-				let hovered = (mouse && btn.rect.contains(mouse));
-				if (hovered) { View.hoveredButton = btn; }
-
-				CardView.drawRoundRect(btn.rect, 10);
-				View.context.fillStyle = hovered ? Button.colors.hoveredFill : Button.colors.fill;
-				View.context.fill();
-				View.context.strokeStyle = Button.colors.border;
-				View.context.stroke();
-				View.context.font = View.boldFont;
-				View.context.fillStyle = hovered ? Button.colors.hoveredText : Button.colors.text;
-				View.context.textAlign = 'center';
-				View.context.textBaseline = 'middle';
-				let center = btn.rect.center;
-				View.context.fillText(btn.caption, center.x, center.y);
-
-				cursor.movex(Button.size.x+gutter);
-			}
 		}
 		public static clear(){
 			let w = View.canvas.width;
@@ -431,6 +315,7 @@ namespace View {
 			View.clear();
 			if (View.screenState === State.attackSetup) { PageAttack.draw(View.context); }
 			else if (View.screenState === State.table) { PageTable.draw(View.context); }
+			else if (View.screenState === State.detail) { PageDetail.draw(View.context); }
 		};
 		public static getHoveredButton(btnSet: Button[], mouse: Util.Point): Button {
 			for (let btn of btnSet) {
@@ -456,12 +341,14 @@ namespace View {
 			switch (this.screenState) {
 				case State.attackSetup: PageAttack.onMouseMove(mouse); break;
 				case State.table: PageTable.onMouseMove(mouse); break;
+				case State.detail: PageDetail.onMouseMove(mouse); break;
 			}
 		}
 		public static onMouseClick(mouse: Util.Point) {
 			switch (this.screenState) {
 				case State.attackSetup: PageAttack.onMouseClick(mouse); break;
 				case State.table: PageTable.onMouseClick(mouse); break;
+				case State.detail: PageDetail.onMouseClick(mouse); break;
 			}
 		}
 
@@ -646,8 +533,8 @@ namespace View {
 			Button.getButton(PageAttack.buttons,'cancel').sety(cursor.y);
 
 			// buttons
-			for (let btn of this.buttons) {
-				btn.draw(ctx, btn === this.hoveredButton);
+			for (let btn of PageAttack.buttons) {
+				btn.draw(ctx, btn === PageAttack.hoveredButton);
 			}
 		}
 
@@ -783,6 +670,113 @@ namespace View {
 			}
 		}
 		
+	}
+	export class PageDetail {
+		public static buttons: Button[] = [];
+		public static hoveredButton: Button;
+		public static callback: (any) => any;
+		public static card: Model.Card;
+		public static colors = {
+			text: 'gray',
+		};
+
+		public static init(callback: (any) => any) {
+			PageDetail.callback = callback;
+			PageDetail.buttons = [
+				new Button('move', PageDetail.btnMoveGroup, new Util.Point(20, 100), 'move'),
+				new Button('attack', PageDetail.btnAttack, new Util.Point(25+Button.size.x,100), 'attack'),
+			];
+		}
+		public static draw(ctx: CanvasRenderingContext2D) {
+			let gutter = 20;
+			let lineHeight = 16;
+			let cursor = new Util.Point(gutter, gutter);
+			let card = PageDetail.card;
+
+			// name
+			ctx.font = View.boldFont;
+			ctx.fillStyle = PageDetail.colors.text;
+			ctx.textAlign = 'left';
+			ctx.textBaseline = 'alphabetic';
+			let cardName = card.name;
+			if (card.cardType === Model.CardType.root) {
+				cardName = 'The ' + card.name;
+			}
+			ctx.fillText(cardName, cursor.x, cursor.y);
+
+			// alignments
+			if (card.alignments && card.alignments.length > 0) {
+				cursor.movey(lineHeight);
+				ctx.fillText('(' + card.alignments + ')', cursor.x, cursor.y);
+			}
+			
+			// numbers
+			cursor.movey(lineHeight);
+			ctx.font = View.font;
+			let atk = '' + card.attack;
+			if(card.aid > 0) { atk += '/' + card.aid; }
+			let def = card.defense;
+			ctx.fillText('attack: ' + atk + '  defense: ' + def, cursor.x, cursor.y);
+			cursor.movey(lineHeight);
+			ctx.fillText('income: '+card.income, cursor.x, cursor.y);
+			
+			// specials
+			if(card.specials.length > 0){
+				cursor.movey(lineHeight);
+				ctx.fillText('specials: ' + card.specials.join(', '), cursor.x, cursor.y);
+			}
+			
+			// description
+			let description = card.description.split('. ');
+			for (let line of description) {
+				cursor.movey(lineHeight);
+				ctx.fillText(line + '.', cursor.x, cursor.y);
+			}
+			
+			// children
+			cursor.movey(lineHeight*2);
+			ctx.fillText('children:', cursor.x, cursor.y);
+			if (card.children.length === 0) {
+				cursor.movey(lineHeight);
+				ctx.fillText('none', cursor.x+10, cursor.y);
+			}
+			else {
+				for (let child of card.children) {
+					cursor.movey(lineHeight);
+					ctx.fillText(child.name, cursor.x+10, cursor.y);
+				}
+			}
+
+			// buttons
+			cursor.movey(lineHeight*2);
+			Button.getButton(PageDetail.buttons, 'move').sety(cursor.y);
+			Button.getButton(PageDetail.buttons, 'attack').sety(cursor.y);
+			for (let btn of PageDetail.buttons) {
+				btn.draw(ctx, btn === PageDetail.hoveredButton);
+			}
+		}
+
+		public static onMouseMove(mouse: Util.Point) {
+			let buttonSet = PageDetail.buttons.filter((btn) => btn.visible===true);
+			PageDetail.hoveredButton = Button.getHoveredButton(buttonSet, mouse);
+			View.drawPage();
+		}
+		public static onMouseClick(mouse: Util.Point) {
+			if (PageDetail.hoveredButton) {
+				PageDetail.hoveredButton.callback(PageDetail.hoveredButton);
+			}
+			else {
+				View.screenState = State.table;
+				View.drawPage();
+			}
+		}
+	
+		public static btnMoveGroup(btn: Button) {
+			PageDetail.callback({command:'btnMoveGroup'})(btn);
+		}
+		public static btnAttack(btn: Button) {
+			PageDetail.callback({command:'btnAttack'})(btn);
+		}
 	}
 	export class PageTable {
 		public static state: TableState;
@@ -944,7 +938,8 @@ namespace View {
 				}
 				else {
 					View.screenState = State.detail;
-					View.drawDetail(View.hoveredCard, mouse);
+					PageDetail.card = View.hoveredCard;
+					View.drawPage();
 				}
 			}
 

@@ -79,6 +79,7 @@ namespace Model {
 		alignments: string[];
 		cardLocation: CardLocation;
 		cardType: CardType;
+		specials = [];
 
 		constructor(name: string, links: number=4) {
 			this.name = name;
@@ -168,7 +169,13 @@ namespace Model {
 				card.attack = parseInt(attack);
 				card.aid = aid ? parseInt(aid) : 0;
 				card.defense = parseInt(def);
-				card.income = parseInt(income);
+				if(income[0] === '*'){
+					card.income = 0;
+					card.specials.push(income.substr(1,income.length-1));
+				}
+				else {
+					card.income = parseInt(income);
+				}
 			}
 			if (type === 'root'){
 				card.objective = objective;
@@ -206,7 +213,7 @@ namespace Model {
 				'group|Democrats||5|4|2|3|Liberal',
 				'group|F.B.I.||4/2|6|2|0|Government,Straight',
 				'group|Hollywood||2|0|2|5|Liberal',
-				'group|I.R.S.|Owning player may tax each opponent 2MB on his own income phase. Tax may come from any group. If a player has no money, he owes no tax.|5/3|5|2|*|Criminal,Government',
+				'group|I.R.S.|Owning player may tax each opponent 2MB on his own income phase. Tax may come from any group. If a player has no money, he owes no tax.|5/3|5|2|*irs tax|Criminal,Government',
 				'group|KGB||2/2|6|1|0|Communist,Violent',
 				'group|Mafia||7|7|3|6|Criminal,Violent',
 				'group|New York||7|8|3|3|Violent,Criminal,Government',

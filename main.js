@@ -193,6 +193,7 @@ var Model;
     class Card {
         constructor(name, links = 4) {
             this.cash = 0;
+            this.specials = [];
             this.name = name;
             this.linkCount = links;
             this.parent = null;
@@ -293,7 +294,13 @@ var Model;
                 card.attack = parseInt(attack);
                 card.aid = aid ? parseInt(aid) : 0;
                 card.defense = parseInt(def);
-                card.income = parseInt(income);
+                if (income[0] === '*') {
+                    card.income = 0;
+                    card.specials.push(income.substr(1, income.length - 1));
+                }
+                else {
+                    card.income = parseInt(income);
+                }
             }
             if (type === 'root') {
                 card.objective = objective;
@@ -372,7 +379,7 @@ var Model;
         'group|Democrats||5|4|2|3|Liberal',
         'group|F.B.I.||4/2|6|2|0|Government,Straight',
         'group|Hollywood||2|0|2|5|Liberal',
-        'group|I.R.S.|Owning player may tax each opponent 2MB on his own income phase. Tax may come from any group. If a player has no money, he owes no tax.|5/3|5|2|*|Criminal,Government',
+        'group|I.R.S.|Owning player may tax each opponent 2MB on his own income phase. Tax may come from any group. If a player has no money, he owes no tax.|5/3|5|2|*irs tax|Criminal,Government',
         'group|KGB||2/2|6|1|0|Communist,Violent',
         'group|Mafia||7|7|3|6|Criminal,Violent',
         'group|New York||7|8|3|3|Violent,Criminal,Government',
@@ -659,7 +666,6 @@ var View;
             this.selected = false;
             this.visible = true;
             this.textAlign = 'center';
-            Button.size = new Util.Point(80, 18);
             this.rect = new Util.Rectangle(ulCorner.x, ulCorner.y, Button.size.x, Button.size.y);
         }
         static getButton(buttonSet, id) {
@@ -721,6 +727,7 @@ var View;
             this.rect.lowerRight.y = y + Button.size.y;
         }
     }
+    Button.size = new Util.Point(80, 18);
     Button.colors = {
         fill: '#efefef',
         border: '#ccc',
@@ -739,130 +746,15 @@ var View;
             View.canvas = document.getElementById('canvas');
             View.context = View.canvas.getContext('2d');
             View.focus = new Util.Point(View.canvas.width / 2, View.canvas.height / 2);
-            View.detailButtons = [
-                new Button('move', View.callback('btnMoveGroup'), new Util.Point(20, 100)),
-                new Button('attack', View.callback('btnAttack'), new Util.Point(100, 100)),
-            ];
+            // View.detailButtons = [
+            // 	new Button('move', View.callback('btnMoveGroup'), new Util.Point(20, 100)),
+            // 	new Button('attack', View.callback('btnAttack'), new Util.Point(100,100)),
+            // ];
             this.orientRootCards(Model.Model.factions);
             this.drawPage();
         }
         static dragFocus(delta) {
             View.focus.move(delta.x, delta.y);
-        }
-        // public static draw(){
-        // 	this.clear();
-        // 	// structure
-        // 	let faction = View.turnObject.factionShown;
-        // 	CardView.orient(faction.root, faction.root.shape.rootPoint.plus(View.focus), 0);
-        // 	// View.drawCard(faction.root);
-        // 	CardView.draw(View.context, faction.root);
-        // 	// header: uncontrolled
-        // 	View.context.fillStyle = View.colors.screen.headerFill;
-        // 	View.context.fillRect(0,0, View.canvas.width, View.cardLength * 1.4);
-        // 	let open = Model.Deck.openCards;
-        // 	let cursor = new Util.Point(View.cardLength/2, 10);
-        // 	for (let card of open) {
-        // 		CardView.orient(card, cursor, 1);
-        // 		CardView.draw(View.context, card);
-        // 		cursor.movex(View.cardLength);
-        // 	}
-        // 	// footer: faction selection, hand, buttons
-        // 	let height = View.cardLength * 1.4;
-        // 	View.context.fillStyle = View.colors.screen.headerFill;
-        // 	View.context.fillRect(0,View.canvas.height-height, View.canvas.width, height);
-        // 	for (let btn of View.factionButtons) {
-        // 		if (btn.data === View.turnObject.faction) { btn.font = View.boldFont; }
-        // 		else { btn.font = View.font; }
-        // 		btn.draw(View.context, btn === View.hoveredButton);
-        // 	}
-        // 	// hovered
-        // 	if(View.hoveredCard){
-        // 		CardView.drawHovered(View.hoveredCard,View.context);
-        // 	}
-        // }
-        static drawDetail(card, mouse = null) {
-            // TODO:
-            // long description lines must wrap (see IRS)
-            // IRS income shows as NaN -- make exceptions for special cases
-            View.clear();
-            let gutter = 20;
-            let lineHeight = 16;
-            let cursor = new Util.Point(gutter, gutter);
-            // name
-            View.context.font = View.boldFont;
-            View.context.fillStyle = CardView.colors.card.text; // TODO: make page object and keep own colors
-            View.context.textAlign = 'left';
-            View.context.textBaseline = 'alphabetic';
-            let cardName = card.name;
-            if (card.cardType === Model.CardType.root) {
-                cardName = 'The ' + card.name;
-            }
-            View.context.fillText(cardName, cursor.x, cursor.y);
-            cursor.movey(lineHeight);
-            View.context.fillText('(' + card.alignments + ')', cursor.x, cursor.y);
-            // numbers
-            cursor.movey(lineHeight);
-            View.context.font = View.font;
-            let atk = '' + card.attack;
-            if (card.aid > 0) {
-                atk += '/' + card.aid;
-            }
-            let def = card.defense;
-            View.context.fillText('attack: ' + atk + '  defense: ' + def, cursor.x, cursor.y);
-            cursor.movey(lineHeight);
-            View.context.fillText('income: ' + card.income, cursor.x, cursor.y);
-            // description
-            cursor.movey(lineHeight);
-            View.context.fillText(card.description, cursor.x, cursor.y);
-            // children
-            cursor.movey(lineHeight * 2);
-            View.context.fillText('children', cursor.x, cursor.y);
-            cursor.movey(lineHeight);
-            View.context.font = View.font;
-            let children = card.children.map((child) => { return child.name; }).join(', ') || 'none';
-            View.context.fillText(children, cursor.x, cursor.y);
-            // TODO: buttons: move, attack, etc.
-            cursor.movey(lineHeight * 2);
-            View.hoveredButton = null;
-            for (let btn of View.detailButtons) {
-                if (btn.caption === 'move') {
-                    if (card.cardType === Model.CardType.root) {
-                        continue;
-                    } // make root immobile
-                    if (card.cardLocation === Model.CardLocation.open) {
-                        continue;
-                    } // make uncontrolled cards immobile
-                }
-                else if (btn.caption === 'attack') {
-                    if (card.cardLocation !== Model.CardLocation.structure) {
-                        continue;
-                    }
-                    if (card.faction !== View.turnObject.faction) {
-                        continue;
-                    }
-                    // TODO: allow for groups that can act twice
-                    if (View.turnObject.getHasActed(card)) {
-                        continue;
-                    }
-                }
-                btn.moveTo(cursor);
-                let hovered = (mouse && btn.rect.contains(mouse));
-                if (hovered) {
-                    View.hoveredButton = btn;
-                }
-                CardView.drawRoundRect(btn.rect, 10);
-                View.context.fillStyle = hovered ? Button.colors.hoveredFill : Button.colors.fill;
-                View.context.fill();
-                View.context.strokeStyle = Button.colors.border;
-                View.context.stroke();
-                View.context.font = View.boldFont;
-                View.context.fillStyle = hovered ? Button.colors.hoveredText : Button.colors.text;
-                View.context.textAlign = 'center';
-                View.context.textBaseline = 'middle';
-                let center = btn.rect.center;
-                View.context.fillText(btn.caption, center.x, center.y);
-                cursor.movex(Button.size.x + gutter);
-            }
         }
         static clear() {
             let w = View.canvas.width;
@@ -878,6 +770,9 @@ var View;
             }
             else if (View.screenState === State.table) {
                 PageTable.draw(View.context);
+            }
+            else if (View.screenState === State.detail) {
+                PageDetail.draw(View.context);
             }
         }
         ;
@@ -910,6 +805,9 @@ var View;
                 case State.table:
                     PageTable.onMouseMove(mouse);
                     break;
+                case State.detail:
+                    PageDetail.onMouseMove(mouse);
+                    break;
             }
         }
         static onMouseClick(mouse) {
@@ -919,6 +817,9 @@ var View;
                     break;
                 case State.table:
                     PageTable.onMouseClick(mouse);
+                    break;
+                case State.detail:
+                    PageDetail.onMouseClick(mouse);
                     break;
             }
         }
@@ -1098,8 +999,8 @@ var View;
             Button.getButton(PageAttack.buttons, 'execute').sety(cursor.y);
             Button.getButton(PageAttack.buttons, 'cancel').sety(cursor.y);
             // buttons
-            for (let btn of this.buttons) {
-                btn.draw(ctx, btn === this.hoveredButton);
+            for (let btn of PageAttack.buttons) {
+                btn.draw(ctx, btn === PageAttack.hoveredButton);
             }
         }
         // accessors
@@ -1236,6 +1137,103 @@ var View;
     PageAttack.rootCash = 0;
     PageAttack.roll = 0;
     View_1.PageAttack = PageAttack;
+    class PageDetail {
+        static init(callback) {
+            PageDetail.callback = callback;
+            PageDetail.buttons = [
+                new Button('move', PageDetail.btnMoveGroup, new Util.Point(20, 100), 'move'),
+                new Button('attack', PageDetail.btnAttack, new Util.Point(25 + Button.size.x, 100), 'attack'),
+            ];
+        }
+        static draw(ctx) {
+            let gutter = 20;
+            let lineHeight = 16;
+            let cursor = new Util.Point(gutter, gutter);
+            let card = PageDetail.card;
+            // name
+            ctx.font = View.boldFont;
+            ctx.fillStyle = PageDetail.colors.text;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+            let cardName = card.name;
+            if (card.cardType === Model.CardType.root) {
+                cardName = 'The ' + card.name;
+            }
+            ctx.fillText(cardName, cursor.x, cursor.y);
+            // alignments
+            if (card.alignments && card.alignments.length > 0) {
+                cursor.movey(lineHeight);
+                ctx.fillText('(' + card.alignments + ')', cursor.x, cursor.y);
+            }
+            // numbers
+            cursor.movey(lineHeight);
+            ctx.font = View.font;
+            let atk = '' + card.attack;
+            if (card.aid > 0) {
+                atk += '/' + card.aid;
+            }
+            let def = card.defense;
+            ctx.fillText('attack: ' + atk + '  defense: ' + def, cursor.x, cursor.y);
+            cursor.movey(lineHeight);
+            ctx.fillText('income: ' + card.income, cursor.x, cursor.y);
+            // specials
+            if (card.specials.length > 0) {
+                cursor.movey(lineHeight);
+                ctx.fillText('specials: ' + card.specials.join(', '), cursor.x, cursor.y);
+            }
+            // description
+            let description = card.description.split('. ');
+            for (let line of description) {
+                cursor.movey(lineHeight);
+                ctx.fillText(line + '.', cursor.x, cursor.y);
+            }
+            // children
+            cursor.movey(lineHeight * 2);
+            ctx.fillText('children:', cursor.x, cursor.y);
+            if (card.children.length === 0) {
+                cursor.movey(lineHeight);
+                ctx.fillText('none', cursor.x + 10, cursor.y);
+            }
+            else {
+                for (let child of card.children) {
+                    cursor.movey(lineHeight);
+                    ctx.fillText(child.name, cursor.x + 10, cursor.y);
+                }
+            }
+            // buttons
+            cursor.movey(lineHeight * 2);
+            Button.getButton(PageDetail.buttons, 'move').sety(cursor.y);
+            Button.getButton(PageDetail.buttons, 'attack').sety(cursor.y);
+            for (let btn of PageDetail.buttons) {
+                btn.draw(ctx, btn === PageDetail.hoveredButton);
+            }
+        }
+        static onMouseMove(mouse) {
+            let buttonSet = PageDetail.buttons.filter((btn) => btn.visible === true);
+            PageDetail.hoveredButton = Button.getHoveredButton(buttonSet, mouse);
+            View.drawPage();
+        }
+        static onMouseClick(mouse) {
+            if (PageDetail.hoveredButton) {
+                PageDetail.hoveredButton.callback(PageDetail.hoveredButton);
+            }
+            else {
+                View.screenState = State.table;
+                View.drawPage();
+            }
+        }
+        static btnMoveGroup(btn) {
+            PageDetail.callback({ command: 'btnMoveGroup' })(btn);
+        }
+        static btnAttack(btn) {
+            PageDetail.callback({ command: 'btnAttack' })(btn);
+        }
+    }
+    PageDetail.buttons = [];
+    PageDetail.colors = {
+        text: 'gray',
+    };
+    View_1.PageDetail = PageDetail;
     class PageTable {
         static init(callback) {
             PageTable.callback = callback;
@@ -1371,7 +1369,8 @@ var View;
                 }
                 else {
                     View.screenState = State.detail;
-                    View.drawDetail(View.hoveredCard, mouse);
+                    PageDetail.card = View.hoveredCard;
+                    View.drawPage();
                 }
             }
         }
@@ -1406,6 +1405,7 @@ var Control;
             View.View.init(Control.viewCallback, Turn);
             View.PageAttack.init(Control.attackCallback);
             View.PageTable.init(Control.tableCallback);
+            View.PageDetail.init(Control.detailCallback);
             View.View.drawPage();
             this.mouse = {
                 down: false,
@@ -1451,6 +1451,13 @@ var Control;
                     this.command = Command.none;
                     break;
                 case 'btnEndTurn': return Control.btnEndTurn;
+            }
+        }
+        static detailCallback(data) {
+            console.log('detailCallback', data);
+            switch (data.command) {
+                case 'btnMoveGroup': return Control.btnMoveGroup;
+                case 'btnAttack': return Control.btnAttack;
             }
         }
         static beginChooseLink(cardToPlace, cardSet = Model.Deck.structureCards) {
@@ -1504,12 +1511,7 @@ var Control;
                 View.View.dragFocus(delta);
                 View.View.drawPage();
             }
-            if (View.View.screenState === View.State.detail) {
-                View.View.drawDetail(View.View.hoveredCard, mouse);
-            }
-            else {
-                View.View.onMouseMove(mouse);
-            }
+            View.View.onMouseMove(mouse);
             this.mouse.last = mouse;
         }
         static onMouseOut(event) {
@@ -1519,21 +1521,9 @@ var Control;
         static onMouseUp(event) {
             Control.mouse.drag = false;
             let mouse = new Util.Point(event.offsetX, event.offsetY);
-            if (View.View.screenState === View.State.detail) {
-                // TODO: buttons, options, etc.
-                if (View.View.hoveredButton) {
-                    View.View.hoveredButton.callback(View.View.hoveredButton);
-                }
-                else {
-                    View.View.screenState = View.State.table;
-                    View.View.drawPage();
-                }
-            }
+            if (this.mouse.drag) { }
             else {
-                if (this.mouse.drag) { }
-                else {
-                    View.View.onMouseClick(mouse);
-                }
+                View.View.onMouseClick(mouse);
             }
             this.mouse.down = false;
             this.mouse.drag = false;
@@ -1587,10 +1577,24 @@ var Control;
             Turn.factionShownIndex = factionIndex;
             Turn.hasActed = [];
             Turn.hasActedTwice = [];
+            Turn.actionsTaken = 0;
             Turn.faction.collectIncome();
         }
         static nextTurn() {
             Turn.initTurn((Turn.factionIndex + 1) % Model.Model.factions.length);
+            // should be at least 2 open cards
+            while (Model.Deck.openCards.length < 2) {
+                let card = Model.Deck.drawGroup();
+                if (card) {
+                    card.cardLocation = Model.CardLocation.open;
+                }
+                else {
+                    break;
+                }
+            }
+            // then draw a card
+            Model.Deck.drawPlot().cardLocation = Model.CardLocation.open;
+            // TODO: if the card is a special, put it in the player's "hand"
         }
         static getHasActed(group) {
             return Turn.hasActed.indexOf(group) > -1;
@@ -1600,6 +1604,7 @@ var Control;
         }
         static setHasActed(group) {
             Turn.hasActed.push(group);
+            Turn.actionsTaken++;
         }
         static setHasActedTwice(group) {
             Turn.hasActedTwice.push(group);
@@ -1611,6 +1616,7 @@ var Control;
             return Model.Model.factions[Turn.factionShownIndex];
         }
     }
+    Turn.actionsTaken = 0;
     Control_1.Turn = Turn;
 })(Control || (Control = {}));
 window.addEventListener('load', function () {

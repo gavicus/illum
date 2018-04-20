@@ -466,7 +466,7 @@ namespace View {
 			atkLine += ' (' + attacker.alignments + ')';
 			ctx.fillText(atkLine, cursor.x, cursor.y);
 			cursor.movey(lineHeight);
-			let defLine = 'defender: '+ defender.name + ' (' + PageAttack.defenseTotal + ')';
+			let defLine = 'defender: '+ defender.name + ' (' + PageAttack.defenseAttribute + ')';
 			defLine += ' (' + defender.alignments + ')';
 			ctx.fillText(defLine, cursor.x, cursor.y);
 
@@ -559,13 +559,17 @@ namespace View {
 			let attacker = PageAttack.callback({command:'getAttacker'});
 			return attacker.attack + PageAttack.alignmentBonus + PageAttack.attackerCash + PageAttack.rootCash;
 		}
-		public static get defenseTotal() {
+		public static get defenseAttribute() {
 			let defender = PageAttack.callback({command:'getDefender'});
 			let defenseAttribute = defender.defense;
 			if(PageAttack.attackType === 'destroy') {
 				defenseAttribute = defender.attack;
 			}
 			return defenseAttribute;
+		}
+		public static get defenseTotal() {
+			let defender = PageAttack.callback({command:'getDefender'});
+			return PageAttack.defenseAttribute + defender.getRootProtection();
 		}
 
 		// button events
@@ -719,6 +723,11 @@ namespace View {
 			ctx.fillText('attack: ' + atk + '  defense: ' + def, cursor.x, cursor.y);
 			cursor.movey(lineHeight);
 			ctx.fillText('income: '+card.income, cursor.x, cursor.y);
+			let protection = card.getRootProtection();
+			if (protection > 0) {
+				cursor.movey(lineHeight);
+				ctx.fillText('protection from illuminati: '+protection, cursor.x, cursor.y);
+			}
 			
 			// specials
 			if(card.specials.length > 0){

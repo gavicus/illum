@@ -157,7 +157,18 @@ namespace Model {
 			}
 			return cursor;
 		}
-
+		getRootProtection(): number {
+			let cursor: Card = this;
+			if(!cursor.parent) { return 0; }
+			if(cursor.cardType === CardType.root) { return 0; }
+			cursor = cursor.parent;
+			if(cursor.cardType === CardType.root) { return 10; }
+			cursor = cursor.parent;
+			if(cursor.cardType === CardType.root) { return 5; }
+			cursor = cursor.parent;
+			if(cursor.cardType === CardType.root) { return 2; }
+			return 0;
+		}
 		static init(text: string): Card {
 			let fields = text.split("|");
 			let [type,name,description,atk,def,links,income,alignments,objective] = text.split("|");

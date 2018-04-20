@@ -283,6 +283,28 @@ var Model;
             }
             return cursor;
         }
+        getRootProtection() {
+            let cursor = this;
+            if (!cursor.parent) {
+                return 0;
+            }
+            if (cursor.cardType === CardType.root) {
+                return 0;
+            }
+            cursor = cursor.parent;
+            if (cursor.cardType === CardType.root) {
+                return 10;
+            }
+            cursor = cursor.parent;
+            if (cursor.cardType === CardType.root) {
+                return 5;
+            }
+            cursor = cursor.parent;
+            if (cursor.cardType === CardType.root) {
+                return 2;
+            }
+            return 0;
+        }
         static init(text) {
             let fields = text.split("|");
             let [type, name, description, atk, def, links, income, alignments, objective] = text.split("|");
@@ -938,7 +960,7 @@ var View;
             atkLine += ' (' + attacker.alignments + ')';
             ctx.fillText(atkLine, cursor.x, cursor.y);
             cursor.movey(lineHeight);
-            let defLine = 'defender: ' + defender.name + ' (' + PageAttack.defenseTotal + ')';
+            let defLine = 'defender: ' + defender.name + ' (' + PageAttack.defenseAttribute + ')';
             defLine += ' (' + defender.alignments + ')';
             ctx.fillText(defLine, cursor.x, cursor.y);
             // totals
@@ -1024,13 +1046,17 @@ var View;
             let attacker = PageAttack.callback({ command: 'getAttacker' });
             return attacker.attack + PageAttack.alignmentBonus + PageAttack.attackerCash + PageAttack.rootCash;
         }
-        static get defenseTotal() {
+        static get defenseAttribute() {
             let defender = PageAttack.callback({ command: 'getDefender' });
             let defenseAttribute = defender.defense;
             if (PageAttack.attackType === 'destroy') {
                 defenseAttribute = defender.attack;
             }
             return defenseAttribute;
+        }
+        static get defenseTotal() {
+            let defender = PageAttack.callback({ command: 'getDefender' });
+            return PageAttack.defenseAttribute + defender.getRootProtection();
         }
         // button events
         static btnAtkType(button) {
@@ -1176,6 +1202,11 @@ var View;
             ctx.fillText('attack: ' + atk + '  defense: ' + def, cursor.x, cursor.y);
             cursor.movey(lineHeight);
             ctx.fillText('income: ' + card.income, cursor.x, cursor.y);
+            let protection = card.getRootProtection();
+            if (protection > 0) {
+                cursor.movey(lineHeight);
+                ctx.fillText('protection from illuminati: ' + protection, cursor.x, cursor.y);
+            }
             // specials
             if (card.specials.length > 0) {
                 cursor.movey(lineHeight);

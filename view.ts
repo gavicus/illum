@@ -448,11 +448,11 @@ namespace View {
 			let attacker = PageAttack.callback({command:'getAttacker'});
 			let defender = PageAttack.callback({command:'getDefender'});
 
-			// TODO: compute target proximity to root card
-			// TODO: allow use of cash
 			// TODO: disallow control attacks if attacker has no open out links
 			// TODO: figure in card special abilities
 			// TODO: newly-controlled cards get their cash halved
+			// TODO: make sure you can't attack the root directly
+			//		don't hilight a root when choosing a target
 
 			let cursor = new Util.Point(leftMargin,lineHeight);
 			ctx.fillStyle = CardView.colors.card.text;

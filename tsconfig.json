@@ -1,6 +1,6 @@
 {
 	"compilerOptions": {
-		"target": "es5",
+		"target": "es6",
 		"outFile":"main.js"
 	},
 	"files": ["util.ts","model.ts","view.ts","main.ts"]

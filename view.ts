@@ -197,7 +197,6 @@ namespace View {
 		public textAlign = 'center';
 		public data: any;
 		public textPoint: Util.Point;
-
 		static colors = {
 			fill: '#efefef',
 			border: '#ccc',
@@ -207,6 +206,18 @@ namespace View {
 			selectedFill: '#ccf',
 		};
 
+		constructor (
+			public caption: string, public callback: (button: View.Button) => void,
+			private ulCorner: Util.Point, public id: string=''
+		) {
+			Button.size = new Util.Point(80,18);
+			this.rect = new Util.Rectangle(ulCorner.x, ulCorner.y, Button.size.x, Button.size.y);
+			this.textPoint = this.rect.center;
+		}
+		
+		static getButton (buttonSet: Button[], id: string) {
+			return buttonSet.find((btn) => btn.id === id);
+		}
 		static getHoveredButton (buttonSet: Button[], mouse: Util.Point): Button {
 			for (let btn of buttonSet) {
 				if(btn.hovered(mouse)) { return btn; }
@@ -214,11 +225,6 @@ namespace View {
 			return null;
 		}
 
-		constructor (public caption: string, public callback: (button: View.Button) => void, private ulCorner) {
-			Button.size = new Util.Point(80,18);
-			this.rect = new Util.Rectangle(ulCorner.x, ulCorner.y, Button.size.x, Button.size.y);
-			this.textPoint = this.rect.center;
-		}
 		draw (c: CanvasRenderingContext2D, hovered: boolean) {
 			if (!this.visible) { return; }
 			if (this.outline) {
@@ -522,11 +528,11 @@ namespace View {
 			// leverage cash buttons
 			cursor.movex(-Button.size.x-5);
 			cursor.movey(lineHeight*2);
-			this.buttons.push(new Button('more',PageAttack.btnOwnCashMore,cursor));
-			this.buttons.push(new Button('less',PageAttack.btnOwnCashLess,cursor.shifted(Button.size.x+5,0)));
+			this.buttons.push(new Button('more',PageAttack.btnOwnCashMore,cursor,'own_cash_more'));
+			this.buttons.push(new Button('less',PageAttack.btnOwnCashLess,cursor.shifted(Button.size.x+5,0),'own_cash_less'));
 			cursor.movey(lineHeight*2);
-			let rootMore = new Button('more',PageAttack.btnRootCashMore,cursor);
-			let rootLess = new Button('less',PageAttack.btnRootCashLess,cursor.shifted(Button.size.x+5,0));
+			let rootMore = new Button('more',PageAttack.btnRootCashMore,cursor,'root_cash_more');
+			let rootLess = new Button('less',PageAttack.btnRootCashLess,cursor.shifted(Button.size.x+5,0),'root_cash_less');
 			this.buttons.push(rootMore,rootLess);
 			
 			// exec & cancel
@@ -628,6 +634,10 @@ namespace View {
 					ctx.fillText('failure!',cursor.x,cursor.y);
 				}
 			}
+
+			// cash
+			cursor.set(View.canvas.width - Button.size.x*2 - 15, 150);
+			
 
 			// buttons
 			for (let btn of this.buttons) {

@@ -752,6 +752,7 @@ namespace View {
 			Button.getButton(PageDetail.buttons, 'move').sety(cursor.y);
 			Button.getButton(PageDetail.buttons, 'attack').sety(cursor.y);
 			for (let btn of PageDetail.buttons) {
+				if(btn.caption==='attack' && Control.Turn.actionsTaken >= 2){ continue; }
 				btn.draw(ctx, btn === PageDetail.hoveredButton);
 			}
 		}

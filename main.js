@@ -305,6 +305,16 @@ var Model;
             }
             return 0;
         }
+        getOpenLinks() {
+            let targets = [];
+            for (let index = 0; index < this.links.length; ++index) {
+                if (this.links[index] !== 1) {
+                    continue;
+                }
+                targets.push(new LinkTarget(this.shape.links[index], this, index));
+            }
+            return targets;
+        }
         static init(text) {
             let fields = text.split("|");
             let [type, name, description, atk, def, links, income, alignments, objective] = text.split("|");
@@ -468,12 +478,7 @@ var Model;
                 if (card.isDescendantOf(movingCard)) {
                     continue;
                 }
-                for (let index = 0; index < card.links.length; ++index) {
-                    if (card.links[index] !== 1) {
-                        continue;
-                    }
-                    targets.push(new LinkTarget(card.shape.links[index], card, index));
-                }
+                targets = targets.concat(card.getOpenLinks());
             }
             return targets;
         }
@@ -486,6 +491,15 @@ var Model;
     Model.factions = [];
     Model_1.Model = Model;
 })(Model || (Model = {}));
+// TODO: disallow control attacks if attacker has no open out links
+// TODO: figure in card special abilities
+// TODO: newly-controlled cards get their cash halved
+// TODO: move faction view buttons from View to PageView
+// TODO: create a visual cueue of unplaced cards...
+//				the first in line is the target of a successful control attack
+//				the next in line are that card's children, then their children, and so on
+//				each card keeps track of its parent, so that can be used for valid link targets
+//				for each card to be placed, guard against card overlap
 var View;
 (function (View_1) {
     let State;
@@ -711,6 +725,7 @@ var View;
             this.outline = true;
             this.selected = false;
             this.visible = true;
+            this.disabled = false;
             this.textAlign = 'center';
             this.rect = new Util.Rectangle(ulCorner.x, ulCorner.y, Button.size.x, Button.size.y);
         }
@@ -783,7 +798,6 @@ var View;
         selectedFill: '#ccf',
     };
     View_1.Button = Button;
-    // TODO: move faction view buttons from View to PageView
     class View {
         static init(controlCallback, turnObj) {
             View.callback = controlCallback;
@@ -792,10 +806,6 @@ var View;
             View.canvas = document.getElementById('canvas');
             View.context = View.canvas.getContext('2d');
             View.focus = new Util.Point(View.canvas.width / 2, View.canvas.height / 2);
-            // View.detailButtons = [
-            // 	new Button('move', View.callback('btnMoveGroup'), new Util.Point(20, 100)),
-            // 	new Button('attack', View.callback('btnAttack'), new Util.Point(100,100)),
-            // ];
             this.orientRootCards(Model.Model.factions);
             this.drawPage();
         }
@@ -966,11 +976,8 @@ var View;
             let lineHeight = 15;
             let attacker = PageAttack.callback({ command: 'getAttacker' });
             let defender = PageAttack.callback({ command: 'getDefender' });
-            // TODO: disallow control attacks if attacker has no open out links
-            // TODO: figure in card special abilities
-            // TODO: newly-controlled cards get their cash halved
             let cursor = new Util.Point(leftMargin, lineHeight);
-            ctx.fillStyle = CardView.colors.card.text;
+            ctx.fillStyle = PageAttack.colors.text;
             ctx.font = View.font;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'alphabetic';
@@ -1183,6 +1190,9 @@ var View;
     PageAttack.attackerCash = 0;
     PageAttack.rootCash = 0;
     PageAttack.roll = 0;
+    PageAttack.colors = {
+        text: 'gray',
+    };
     View_1.PageAttack = PageAttack;
     class PageDetail {
         static init(callback) {
@@ -1303,7 +1313,7 @@ var View;
             cursor.set(10, View.canvas.height - 15);
             for (let i = Model.Model.factions.length - 1; i >= 0; --i) {
                 let faction = Model.Model.factions[i];
-                let btn = new Button(faction.root.name, View.callback('btnShowFaction'), cursor.clone());
+                let btn = new Button(faction.root.name, PageTable.callback('btnShowFaction'), cursor.clone());
                 btn.data = faction;
                 btn.outline = false;
                 btn.textAlign = 'left';
@@ -1453,12 +1463,13 @@ var View;
     PageTable.hoveredLink = null;
     PageTable.buttons = [];
     PageTable.factionButtons = [];
-    // TODO: handle own input events -- faction view buttons
     PageTable.colors = {
         headerFill: '#eee',
     };
     View_1.PageTable = PageTable;
 })(View || (View = {}));
+// TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
+// TODO: if the card is a special, put it in the player's "hand"
 var Control;
 (function (Control_1) {
     let Command;
@@ -1492,7 +1503,6 @@ var Control;
             switch (command) {
                 case 'btnMoveGroup': return Control.btnMoveGroup;
                 case 'btnAttack': return Control.btnAttack;
-                case 'btnShowFaction': return Control.btnShowFaction;
             }
         }
         static attackCallback(data) {
@@ -1526,6 +1536,7 @@ var Control;
                     this.command = Command.none;
                     break;
                 case 'btnEndTurn': return Control.btnEndTurn;
+                case 'btnShowFaction': return Control.btnShowFaction;
             }
         }
         static detailCallback(data) {
@@ -1536,8 +1547,6 @@ var Control;
             }
         }
         static beginChooseLink(cardToPlace, cardSet = Model.Deck.structureCards) {
-            console.log('beginChooseLink');
-            // TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
             View.View.screenState = View.State.table;
             View.PageTable.state = View.TableState.chooseLink;
             View.PageTable.linkTargets = Model.Model.getLinkTargets(cardToPlace, cardSet);
@@ -1669,7 +1678,6 @@ var Control;
             }
             // then draw a card
             Model.Deck.drawPlot().cardLocation = Model.CardLocation.open;
-            // TODO: if the card is a special, put it in the player's "hand"
         }
         static getHasActed(group) {
             return Turn.hasActed.indexOf(group) > -1;

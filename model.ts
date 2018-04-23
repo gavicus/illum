@@ -169,6 +169,15 @@ namespace Model {
 			if(cursor.cardType === CardType.root) { return 2; }
 			return 0;
 		}
+		getOpenLinks(): LinkTarget[] {
+			let targets: LinkTarget[] = [];
+			for (let index = 0; index < this.links.length; ++index){
+				if (this.links[index] !== 1) { continue; }
+				targets.push(new LinkTarget(this.shape.links[index], this, index));
+			}
+			return targets;
+		}
+		
 		static init(text: string): Card {
 			let fields = text.split("|");
 			let [type,name,description,atk,def,links,income,alignments,objective] = text.split("|");
@@ -327,10 +336,7 @@ namespace Model {
 				if (card.faction !== faction) { continue; }
 				if (card === movingCard){ continue; }
 				if (card.isDescendantOf(movingCard)) { continue; }
-				for (let index = 0; index < card.links.length; ++index){
-					if (card.links[index] !== 1) { continue; }
-					targets.push(new LinkTarget(card.shape.links[index], card, index));
-				}
+				targets = targets.concat(card.getOpenLinks());
 			}
 			return targets;
 		}

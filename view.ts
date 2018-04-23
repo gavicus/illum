@@ -3,6 +3,11 @@
 // TODO: figure in card special abilities
 // TODO: newly-controlled cards get their cash halved
 // TODO: move faction view buttons from View to PageView
+// TODO: create a visual cueue of unplaced cards...
+//				the first in line is the target of a successful control attack
+//				the next in line are that card's children, then their children, and so on
+//				each card keeps track of its parent, so that can be used for valid link targets
+//				for each card to be placed, guard against card overlap
 
 namespace View {
 	export enum State {table, detail, choice, attackSetup};
@@ -200,6 +205,7 @@ namespace View {
 		public outline = true;
 		public selected = false;
 		public visible = true;
+		public disabled = false;
 		public textAlign = 'center';
 		public data: any;
 		static colors = {
@@ -212,8 +218,7 @@ namespace View {
 		};
 
 		constructor (
-			public caption: string, public callback: (button: View.Button) => void,
-			private ulCorner: Util.Point, public id: string=''
+			public caption: string, public callback: (button: View.Button) => void, private ulCorner: Util.Point, public id: string=''
 		) {
 			this.rect = new Util.Rectangle(ulCorner.x, ulCorner.y, Button.size.x, Button.size.y);
 		}
@@ -791,7 +796,6 @@ namespace View {
 		private static callback: (any) => any;
 		public static buttons: Button[] = [];
 		static factionButtons: Button[] = [];
-		// TODO: handle own input events -- faction view buttons
 		public static colors = {
 			headerFill: '#eee',
 		};

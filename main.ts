@@ -1,3 +1,5 @@
+// TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
+// TODO: if the card is a special, put it in the player's "hand"
 
 namespace Control {
 	export enum Command {none, placeCard, attack};
@@ -72,10 +74,6 @@ namespace Control {
 		}
 
 		public static beginChooseLink(cardToPlace: Model.Card, cardSet: Model.Card[] = Model.Deck.structureCards){
-
-			console.log('beginChooseLink');
-
-			// TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
 			View.View.screenState = View.State.table;
 			View.PageTable.state = View.TableState.chooseLink;
 			View.PageTable.linkTargets = Model.Model.getLinkTargets(cardToPlace, cardSet);
@@ -213,7 +211,6 @@ namespace Control {
 			}
 			// then draw a card
 			Model.Deck.drawPlot().cardLocation = Model.CardLocation.open;
-			// TODO: if the card is a special, put it in the player's "hand"
 		}
 
 		static getHasActed(group: Model.Card): boolean {

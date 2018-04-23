@@ -1,3 +1,8 @@
+// TODO: disallow control attacks if attacker has no open out links
+// TODO: figure in card special abilities
+// TODO: newly-controlled cards get their cash halved
+// TODO: move faction view buttons from View to PageView
+
 namespace View {
 	export enum State {table, detail, choice, attackSetup};
 	export enum AttackState {setup, success, failure};
@@ -263,8 +268,6 @@ namespace View {
 		}
 	}
 
-	// TODO: move faction view buttons from View to PageView
-
 	export class View {
 		static screenState: State;
 		static readonly arcRadius = 0.15;
@@ -371,7 +374,6 @@ namespace View {
 	}
 
 	export class PageAttack {
-		// TODO: store own colors
 		public static state: AttackState;
 		public static buttons: Button[] = [];
 		public static hoveredButton: Button = null;
@@ -380,6 +382,9 @@ namespace View {
 		public static rootCash = 0;
 		public static roll = 0;
 		public static callback: (data:any) => any;
+		public static colors = {
+			text: 'gray',
+		};
 
 		public static init(atkCallback: (data:any) => any) {
 			PageAttack.callback = atkCallback;
@@ -447,12 +452,8 @@ namespace View {
 			let attacker = PageAttack.callback({command:'getAttacker'});
 			let defender = PageAttack.callback({command:'getDefender'});
 
-			// TODO: disallow control attacks if attacker has no open out links
-			// TODO: figure in card special abilities
-			// TODO: newly-controlled cards get their cash halved
-
 			let cursor = new Util.Point(leftMargin,lineHeight);
-			ctx.fillStyle = CardView.colors.card.text;
+			ctx.fillStyle = PageAttack.colors.text;
 			ctx.font = View.font;
 			ctx.textAlign = 'left';
 			ctx.textBaseline = 'alphabetic';

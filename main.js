@@ -91,6 +91,18 @@ var Util;
         get center() {
             return new Point(this.upperLeft.x + (this.lowerRight.x - this.upperLeft.x) / 2, this.upperLeft.y + (this.lowerRight.y - this.upperLeft.y) / 2);
         }
+        get x() {
+            return this.upperLeft.x;
+        }
+        get y() {
+            return this.upperLeft.y;
+        }
+        get w() {
+            return this.lowerRight.x - this.upperLeft.x;
+        }
+        get h() {
+            return this.lowerRight.y - this.upperLeft.y;
+        }
     }
     Util.Rectangle = Rectangle;
 })(Util || (Util = {}));
@@ -305,7 +317,7 @@ var Model;
             }
             return 0;
         }
-        getOpenLinks() {
+        get openLinks() {
             let targets = [];
             for (let index = 0; index < this.links.length; ++index) {
                 if (this.links[index] !== 1) {
@@ -478,7 +490,7 @@ var Model;
                 if (card.isDescendantOf(movingCard)) {
                     continue;
                 }
-                targets = targets.concat(card.getOpenLinks());
+                targets = targets.concat(card.openLinks);
             }
             return targets;
         }
@@ -522,6 +534,12 @@ var View;
         TableState[TableState["normal"] = 0] = "normal";
         TableState[TableState["chooseLink"] = 1] = "chooseLink";
     })(TableState = View_1.TableState || (View_1.TableState = {}));
+    ;
+    let ElementType;
+    (function (ElementType) {
+        ElementType[ElementType["input"] = 0] = "input";
+        ElementType[ElementType["transfer"] = 1] = "transfer";
+    })(ElementType = View_1.ElementType || (View_1.ElementType = {}));
     ;
     class CardView {
         static draw(ctx, card) {
@@ -787,6 +805,9 @@ var View;
             this.rect.upperLeft.y = y;
             this.rect.lowerRight.y = y + Button.size.y;
         }
+        setWidth(w) {
+            this.rect.lowerRight.x = this.rect.upperLeft.x + w;
+        }
     }
     Button.size = new Util.Point(80, 18);
     Button.colors = {
@@ -798,6 +819,93 @@ var View;
         selectedFill: '#ccf',
     };
     View_1.Button = Button;
+    class Dialog {
+        constructor(caption, callback) {
+            this.caption = caption;
+            this.callback = callback;
+            this.ok = true; // false if cancel clicked
+            this.elements = [];
+            this.buttons = [];
+            this.hoveredButton = null;
+            let ok = new Button('ok', this.btnOk, new Util.Point(), 'ok');
+            let cancel = new Button('ok', this.btnCancel, new Util.Point(), 'cancel');
+            this.buttons.push(ok, cancel);
+        }
+        addTransfer(nameOne, valueOne, nameTwo, valueTwo) {
+            let elem = {
+                type: ElementType.transfer,
+                left: new Button(nameOne + ': ' + valueOne, this.btnTransfer, new Util.Point()),
+                right: new Button(nameTwo + ': ' + valueTwo, this.btnTransfer, new Util.Point()),
+                leftName: nameOne, leftValue: valueOne,
+                rightName: nameTwo, rightValue: valueTwo,
+            };
+            elem.left.data = { element: elem };
+            elem.right.data = { element: elem };
+            this.buttons.push(elem.left, elem.right);
+            this.elements.push(elem);
+        }
+        draw(ctx) {
+            let cWidth = View.canvas.width;
+            let cHeight = View.canvas.height;
+            let height = Dialog.lineHeight * (2 + this.elements.length);
+            let width = 200;
+            let upLeft = new Util.Point(cWidth / 2 - width / 2, cHeight / 2 - height / 2);
+            let dialogRect = new Util.Rectangle(upLeft.x, upLeft.y, width, height);
+            ctx.fillStyle = Dialog.colors.fill;
+            ctx.fillRect(upLeft.x, upLeft.y, width, height);
+            ctx.strokeStyle = Dialog.colors.border;
+            ctx.strokeRect(upLeft.x, upLeft.y, width, height);
+            let cursor = new Util.Point(cWidth / 2, upLeft.y);
+            // caption
+            ctx.font = View.boldFont;
+            ctx.fillStyle = Dialog.colors.text;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(this.caption, cursor.x, cursor.y + Dialog.lineHeight / 2);
+            // elements
+            // TOSO: convert rects below to Button objects
+            let gutter = 5;
+            for (let elem of this.elements) {
+                cursor.y += Dialog.lineHeight;
+                if (elem.type === ElementType.transfer) {
+                    elem.left.rect.set(dialogRect.upperLeft.x + gutter, cursor.y + gutter, width / 2 - gutter * 2, Dialog.lineHeight - gutter * 2);
+                    (elem.left).draw(ctx, elem.left === this.hoveredButton);
+                    elem.right.rect.set(cWidth / 2 + gutter, cursor.y + gutter, width / 2 - gutter * 2, Dialog.lineHeight - gutter * 2);
+                    (elem.right).draw(ctx, elem.right === this.hoveredButton);
+                }
+            }
+            // ok / cancel
+            cursor.y += Dialog.lineHeight;
+            let ok = Button.getButton(this.buttons, 'ok');
+            ok.moveTo(cursor.shifted(-Button.size.x - gutter, 0));
+            ok.draw(ctx, ok === this.hoveredButton);
+            let cancel = Button.getButton(this.buttons, 'cancel');
+            cancel.moveTo(cursor.shifted(gutter, 0));
+            cancel.draw(ctx, cancel === this.hoveredButton);
+        }
+        btnTransfer(btn) {
+            console.log('btnTransfer');
+        }
+        btnOk(btn) {
+            console.log('btnOk');
+        }
+        btnCancel(btn) {
+            console.log('btnCancel');
+        }
+    }
+    Dialog.lineHeight = 30;
+    Dialog.colors = {
+        fill: 'white',
+        border: 'gray',
+        text: 'gray',
+    };
+    View_1.Dialog = Dialog;
+    function testDialog() {
+        let d = new Dialog('testing', () => { });
+        d.addTransfer('one', 1, 'two', 2);
+        d.draw(View.context);
+    }
+    View_1.testDialog = testDialog;
     class View {
         static init(controlCallback, turnObj) {
             View.callback = controlCallback;
@@ -917,11 +1025,11 @@ var View;
             let cursor = new Util.Point(0, 0);
             // attack type
             cursor.set(View.canvas.width - Button.size.x - 10, 10);
-            let cmd1 = new Button('control', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
+            let cmd1 = new Button('control', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y), 'control');
             cursor.movey(lineHeight);
-            let cmd2 = new Button('neutralize', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
+            let cmd2 = new Button('neutralize', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y), 'neutralize');
             cursor.movey(lineHeight);
-            let cmd3 = new Button('destroy', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
+            let cmd3 = new Button('destroy', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y), 'destroy');
             cmd1.selected = true;
             let data = { group: [cmd1, cmd2, cmd3] };
             cmd1.data = data;
@@ -1049,6 +1157,14 @@ var View;
             Button.getButton(PageAttack.buttons, 'execute').sety(cursor.y);
             Button.getButton(PageAttack.buttons, 'cancel').sety(cursor.y);
             // buttons
+            if (attacker.openLinks.length === 0) {
+                let controlBtn = Button.getButton(PageAttack.buttons, 'control');
+                controlBtn.disabled = true;
+                controlBtn.selected = false;
+                if (PageAttack.attackType === 'control') {
+                    PageAttack.attackType = '';
+                }
+            }
             for (let btn of PageAttack.buttons) {
                 btn.draw(ctx, btn === PageAttack.hoveredButton);
             }

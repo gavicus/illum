@@ -169,7 +169,7 @@ namespace Model {
 			if(cursor.cardType === CardType.root) { return 2; }
 			return 0;
 		}
-		getOpenLinks(): LinkTarget[] {
+		get openLinks(): LinkTarget[] {
 			let targets: LinkTarget[] = [];
 			for (let index = 0; index < this.links.length; ++index){
 				if (this.links[index] !== 1) { continue; }
@@ -336,7 +336,7 @@ namespace Model {
 				if (card.faction !== faction) { continue; }
 				if (card === movingCard){ continue; }
 				if (card.isDescendantOf(movingCard)) { continue; }
-				targets = targets.concat(card.getOpenLinks());
+				targets = targets.concat(card.openLinks);
 			}
 			return targets;
 		}

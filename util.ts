@@ -88,6 +88,18 @@ namespace Util {
 				this.upperLeft.y + (this.lowerRight.y - this.upperLeft.y) / 2
 			);
 		}
+		get x(): number {
+			return this.upperLeft.x;
+		}
+		get y(): number {
+			return this.upperLeft.y;
+		}
+		get w(): number {
+			return this.lowerRight.x - this.upperLeft.x;
+		}
+		get h(): number {
+			return this.lowerRight.y - this.upperLeft.y;
+		}
 	}
 
 }

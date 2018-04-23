@@ -13,6 +13,7 @@ namespace View {
 	export enum State {table, detail, choice, attackSetup};
 	export enum AttackState {setup, success, failure};
 	export enum TableState {normal, chooseLink};
+	export enum ElementType {input,transfer};
 
 	export class CardView {
 		static arrowSize = 0.1;
@@ -197,7 +198,6 @@ namespace View {
 			card.shape.rect.set(x,y,w,h);
 		}
 	}
-
 	export class Button {
 		public static size = new Util.Point(80,18);
 		public rect: Util.Rectangle;
@@ -217,9 +217,7 @@ namespace View {
 			selectedFill: '#ccf',
 		};
 
-		constructor (
-			public caption: string, public callback: (button: View.Button) => void, private ulCorner: Util.Point, public id: string=''
-		) {
+		constructor (public caption: string, public callback: (button: View.Button) => void, private ulCorner: Util.Point, public id: string='') {
 			this.rect = new Util.Rectangle(ulCorner.x, ulCorner.y, Button.size.x, Button.size.y);
 		}
 		
@@ -232,7 +230,6 @@ namespace View {
 			}
 			return null;
 		}
-
 		get textPoint(): Util.Point {
 			if(this.textAlign==='center'){ return this.rect.center; }
 			else {
@@ -271,6 +268,100 @@ namespace View {
 		sety (y: number): void {
 			this.rect.upperLeft.y = y;
 			this.rect.lowerRight.y = y + Button.size.y;
+		}
+		setWidth(w: number): void {
+			this.rect.lowerRight.x = this.rect.upperLeft.x + w;
+		}
+	}
+	export class Dialog {
+		public static lineHeight = 30;
+		public static colors = {
+			fill: 'white',
+			border: 'gray',
+			text: 'gray',
+		};
+		public ok = true; // false if cancel clicked
+		public visible = true;
+		public elements = [];
+		public buttons: Button[] = [];
+		public hoveredButton: Button = null;
+
+		constructor(public caption: string, public callback: (any) => any) {
+			let ok = new Button('ok',this.btnOk,new Util.Point(),'ok');
+			let cancel = new Button('cancel',this.btnCancel,new Util.Point(),'cancel');
+			this.buttons.push(ok,cancel);
+		}
+
+		public addTransfer(nameOne: string, valueOne: number, nameTwo: string, valueTwo: number): void {
+			let elem = {
+				type:ElementType.transfer,
+				left: new Button(nameOne+': '+valueOne, this.btnTransfer, new Util.Point()),
+				right: new Button(nameTwo+': '+valueTwo, this.btnTransfer, new Util.Point()),
+				leftName: nameOne, leftValue: valueOne,
+				rightName: nameTwo, rightValue: valueTwo,
+			};
+			elem.left.data = {element: elem};
+			elem.right.data = {element: elem};
+			this.buttons.push(elem.left, elem.right);
+			this.elements.push(elem);
+		}
+		public draw(ctx: CanvasRenderingContext2D): void {
+			let cWidth = View.canvas.width;
+			let cHeight = View.canvas.height;
+			let height = Dialog.lineHeight * (2 + this.elements.length);
+			let width = 200;
+			let upLeft = new Util.Point(cWidth/2-width/2, cHeight/2-height/2);
+			let dialogRect = new Util.Rectangle(upLeft.x, upLeft.y, width, height);
+			ctx.fillStyle = Dialog.colors.fill;
+			ctx.fillRect(upLeft.x, upLeft.y, width, height);
+			ctx.strokeStyle = Dialog.colors.border;
+			ctx.strokeRect(upLeft.x, upLeft.y, width, height);
+			let cursor = new Util.Point(cWidth/2, upLeft.y);
+			// caption
+			ctx.font = View.boldFont;
+			ctx.fillStyle = Dialog.colors.text;
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'alphabetic';
+			ctx.fillText(this.caption, cursor.x, cursor.y+Dialog.lineHeight/2);
+			// elements
+			// TOSO: convert rects below to Button objects
+			let gutter = 5;
+			for (let elem of this.elements) {
+				cursor.y += Dialog.lineHeight;
+				if (elem.type === ElementType.transfer) {
+					elem.left.rect.set(
+						dialogRect.upperLeft.x + gutter,
+						cursor.y + gutter,
+						width/2-gutter*2,
+						Dialog.lineHeight-gutter*2
+					);
+					<Button>(elem.left).draw(ctx, elem.left === this.hoveredButton);
+					elem.right.rect.set(
+						cWidth/2 + gutter,
+						cursor.y + gutter,
+						width/2-gutter*2,
+						Dialog.lineHeight-gutter*2
+					);
+					<Button>(elem.right).draw(ctx, elem.right === this.hoveredButton);
+				}
+			}
+			// ok / cancel
+			cursor.y += Dialog.lineHeight;
+			let ok = Button.getButton(this.buttons, 'ok');
+			ok.moveTo(cursor.shifted(-Button.size.x-gutter, 0));
+			ok.draw(ctx, ok === this.hoveredButton);
+			let cancel = Button.getButton(this.buttons, 'cancel');
+			cancel.moveTo(cursor.shifted(gutter, 0));
+			cancel.draw(ctx, cancel === this.hoveredButton);
+		}
+		public btnTransfer(btn: Button): void {
+			console.log('btnTransfer');
+		}
+		public btnOk(btn: Button): void {
+			console.log('btnOk');
+		}
+		public btnCancel(btn: Button): void {
+			console.log('btnCancel');
 		}
 	}
 
@@ -396,11 +487,11 @@ namespace View {
 
 			// attack type
 			cursor.set(View.canvas.width - Button.size.x - 10, 10);
-			let cmd1 = new Button('control', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
+			let cmd1 = new Button('control', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y), 'control');
 			cursor.movey(lineHeight);
-			let cmd2 = new Button('neutralize', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
+			let cmd2 = new Button('neutralize', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y), 'neutralize');
 			cursor.movey(lineHeight);
-			let cmd3 = new Button('destroy', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y));
+			let cmd3 = new Button('destroy', PageAttack.btnAtkType, new Util.Point(cursor.x, cursor.y), 'destroy');
 			cmd1.selected = true;
 			let data = {group:[cmd1,cmd2,cmd3]};
 			cmd1.data = data;
@@ -532,6 +623,12 @@ namespace View {
 			Button.getButton(PageAttack.buttons,'cancel').sety(cursor.y);
 
 			// buttons
+			if(attacker.openLinks.length===0){
+				let controlBtn = Button.getButton(PageAttack.buttons, 'control');
+				controlBtn.disabled = true;
+				controlBtn.selected = false;
+				if (PageAttack.attackType === 'control') { PageAttack.attackType = ''; }
+			}
 			for (let btn of PageAttack.buttons) {
 				btn.draw(ctx, btn === PageAttack.hoveredButton);
 			}

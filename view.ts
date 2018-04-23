@@ -1,3 +1,4 @@
+
 // TODO: disallow control attacks if attacker has no open out links
 // TODO: figure in card special abilities
 // TODO: newly-controlled cards get their cash halved
@@ -295,12 +296,7 @@ namespace View {
 			View.canvas = <HTMLCanvasElement>document.getElementById('canvas');
 			View.context = View.canvas.getContext('2d');
 			View.focus = new Util.Point(View.canvas.width/2, View.canvas.height/2);
-			// View.detailButtons = [
-			// 	new Button('move', View.callback('btnMoveGroup'), new Util.Point(20, 100)),
-			// 	new Button('attack', View.callback('btnAttack'), new Util.Point(100,100)),
-			// ];
 			this.orientRootCards(Model.Model.factions);
-
 			this.drawPage();
 		}
 		public static dragFocus(delta: Util.Point) {
@@ -817,7 +813,7 @@ namespace View {
 			cursor.set(10,View.canvas.height-15);
 			for (let i=Model.Model.factions.length-1; i>=0; --i) {
 				let faction = Model.Model.factions[i];
-				let btn = new Button(faction.root.name, View.callback('btnShowFaction'), cursor.clone());
+				let btn = new Button(faction.root.name, PageTable.callback('btnShowFaction'), cursor.clone());
 				btn.data = faction;
 				btn.outline = false;
 				btn.textAlign = 'left';

@@ -41,7 +41,6 @@ namespace Control {
 			switch (command) {
 				case 'btnMoveGroup': return Control.btnMoveGroup;
 				case 'btnAttack': return Control.btnAttack;
-				case 'btnShowFaction': return Control.btnShowFaction;
 			}
 		}
 		public static attackCallback(data): any {
@@ -61,6 +60,7 @@ namespace Control {
 				case 'setDefender': Attack.setDefender(data.value); break;
 				case 'clearCommand': this.command = Command.none; break;
 				case 'btnEndTurn': return Control.btnEndTurn;
+				case 'btnShowFaction': return Control.btnShowFaction;
 			}
 		}
 		public static detailCallback(data): any {

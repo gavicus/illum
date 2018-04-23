@@ -899,7 +899,6 @@ var View;
         },
     };
     View_1.View = View;
-    // TODO: [execute] should keep us on attack setup page until [done] is clicked
     class PageAttack {
         static init(atkCallback) {
             PageAttack.callback = atkCallback;
@@ -970,8 +969,6 @@ var View;
             // TODO: disallow control attacks if attacker has no open out links
             // TODO: figure in card special abilities
             // TODO: newly-controlled cards get their cash halved
-            // TODO: make sure you can't attack the root directly
-            //		don't hilight a root when choosing a target
             let cursor = new Util.Point(leftMargin, lineHeight);
             ctx.fillStyle = CardView.colors.card.text;
             ctx.font = View.font;
@@ -1351,9 +1348,18 @@ var View;
             cursor.set(10, View.canvas.height - height - 10);
             ctx.font = View.font;
             ctx.textAlign = 'left';
-            ctx.fillText('PageTable state: ' + TableState[PageTable.state], cursor.x, cursor.y);
+            let message = 'table state: ' + TableState[PageTable.state];
+            ctx.fillText(message, cursor.x, cursor.y);
             // hovered
             if (PageTable.state === TableState.chooseLink) {
+                if (PageTable.mouse) {
+                    let height = View.cardLength;
+                    let width = View.cardLength * View.widthRatio;
+                    let rect = new Util.Rectangle(PageTable.mouse.x - width / 2, PageTable.mouse.y - height / 2, width, height);
+                    CardView.drawRoundRect(rect, View.getArcSize());
+                    ctx.strokeStyle = '#aaa';
+                    ctx.stroke();
+                }
             }
             else if (View.hoveredCard) {
                 CardView.drawHovered(View.hoveredCard, ctx);
@@ -1370,6 +1376,7 @@ var View;
             View.context.stroke();
         }
         static onMouseMove(mouse) {
+            PageTable.mouse = mouse;
             if (PageTable.state === TableState.chooseLink) {
                 let closest = null;
                 let sqDist = 0;

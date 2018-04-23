@@ -824,11 +824,14 @@ var View;
             this.caption = caption;
             this.callback = callback;
             this.ok = true; // false if cancel clicked
+            this.visible = false;
             this.elements = [];
             this.buttons = [];
             this.hoveredButton = null;
             let ok = new Button('ok', this.btnOk, new Util.Point(), 'ok');
-            let cancel = new Button('ok', this.btnCancel, new Util.Point(), 'cancel');
+            ok.data = this;
+            let cancel = new Button('cancel', this.btnCancel, new Util.Point(), 'cancel');
+            cancel.data = this;
             this.buttons.push(ok, cancel);
         }
         addTransfer(nameOne, valueOne, nameTwo, valueTwo) {
@@ -839,8 +842,8 @@ var View;
                 leftName: nameOne, leftValue: valueOne,
                 rightName: nameTwo, rightValue: valueTwo,
             };
-            elem.left.data = { element: elem };
-            elem.right.data = { element: elem };
+            elem.left.data = { element: elem, dialog: this };
+            elem.right.data = { element: elem, dialog: this };
             this.buttons.push(elem.left, elem.right);
             this.elements.push(elem);
         }
@@ -883,14 +886,48 @@ var View;
             cancel.moveTo(cursor.shifted(gutter, 0));
             cancel.draw(ctx, cancel === this.hoveredButton);
         }
+        // mouse events
+        onMouseMove(mouse) {
+            this.hoveredButton = Button.getHoveredButton(this.buttons, mouse);
+            View.drawPage();
+        }
+        onMouseClick(mouse) {
+            this.hoveredButton.callback(this.hoveredButton);
+            View.drawPage();
+        }
+        // buttons
         btnTransfer(btn) {
-            console.log('btnTransfer');
+            let elem = btn.data.element;
+            if (btn === elem.left) {
+                if (elem.rightValue > 0) {
+                    elem.rightValue--;
+                    elem.leftValue++;
+                }
+            }
+            else {
+                if (elem.leftValue > 0) {
+                    elem.leftValue--;
+                    elem.rightValue++;
+                }
+            }
+            elem.left.caption = elem.leftName + ': ' + elem.leftValue;
+            elem.right.caption = elem.rightName + ': ' + elem.rightValue;
+            View.drawPage();
         }
         btnOk(btn) {
             console.log('btnOk');
+            console.log('button', btn);
+            // this.ok = true;
+            // this.callback(this);
+            btn.data.ok = true;
+            btn.data.callback(btn.data);
         }
         btnCancel(btn) {
             console.log('btnCancel');
+            // this.ok = false;
+            // this.callback(this);
+            btn.data.ok = false;
+            btn.data.callback(btn.data);
         }
     }
     Dialog.lineHeight = 30;
@@ -900,12 +937,6 @@ var View;
         text: 'gray',
     };
     View_1.Dialog = Dialog;
-    function testDialog() {
-        let d = new Dialog('testing', () => { });
-        d.addTransfer('one', 1, 'two', 2);
-        d.draw(View.context);
-    }
-    View_1.testDialog = testDialog;
     class View {
         static init(controlCallback, turnObj) {
             View.callback = controlCallback;
@@ -1240,9 +1271,6 @@ var View;
             View.drawPage();
         }
         static btnDone(button) {
-            console.log('btnDone');
-            console.log('attack type', PageAttack.attackType);
-            console.log('PageAttack.state', AttackState[PageAttack.state]);
             PageAttack.callback({ command: 'attackerDone' });
             View.screenState = State.table;
             if (PageAttack.state === AttackState.failure) {
@@ -1437,6 +1465,12 @@ var View;
                 PageTable.factionButtons.push(btn);
                 cursor.movey(-14);
             }
+            let dialog = new Dialog('just a test', PageTable.dialogTest);
+            dialog.addTransfer('one', 1, 'two', 2);
+            this.dialogs.push(dialog);
+        }
+        static dialogTest(dlg) {
+            console.log('dialogTest', dlg);
         }
         static get footerHeight() { return View.cardLength * 1.4; }
         static draw(ctx) {
@@ -1490,6 +1524,12 @@ var View;
             else if (View.hoveredCard) {
                 CardView.drawHovered(View.hoveredCard, ctx);
             }
+            // dialogs
+            for (let dlg of PageTable.dialogs) {
+                if (dlg.visible) {
+                    dlg.draw(ctx);
+                }
+            }
         }
         static drawLinkChoice(closest) {
             View.drawPage();
@@ -1503,6 +1543,12 @@ var View;
         }
         static onMouseMove(mouse) {
             PageTable.mouse = mouse;
+            for (let dlg of PageTable.dialogs) {
+                if (dlg.visible) {
+                    dlg.onMouseMove(mouse);
+                    return;
+                }
+            }
             if (PageTable.state === TableState.chooseLink) {
                 let closest = null;
                 let sqDist = 0;
@@ -1545,6 +1591,12 @@ var View;
             }
         }
         static onMouseClick(mouse) {
+            for (let dlg of PageTable.dialogs) {
+                if (dlg.visible) {
+                    dlg.onMouseClick(mouse);
+                    return;
+                }
+            }
             if (PageTable.state === TableState.chooseLink) {
                 // TODO: check for card overlap
                 if (PageTable.hoveredLink) {
@@ -1579,6 +1631,7 @@ var View;
     PageTable.hoveredLink = null;
     PageTable.buttons = [];
     PageTable.factionButtons = [];
+    PageTable.dialogs = [];
     PageTable.colors = {
         headerFill: '#eee',
     };

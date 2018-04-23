@@ -281,14 +281,16 @@ namespace View {
 			text: 'gray',
 		};
 		public ok = true; // false if cancel clicked
-		public visible = true;
+		public visible = false;
 		public elements = [];
 		public buttons: Button[] = [];
 		public hoveredButton: Button = null;
 
 		constructor(public caption: string, public callback: (any) => any) {
 			let ok = new Button('ok',this.btnOk,new Util.Point(),'ok');
+			ok.data = this;
 			let cancel = new Button('cancel',this.btnCancel,new Util.Point(),'cancel');
+			cancel.data = this;
 			this.buttons.push(ok,cancel);
 		}
 
@@ -300,8 +302,8 @@ namespace View {
 				leftName: nameOne, leftValue: valueOne,
 				rightName: nameTwo, rightValue: valueTwo,
 			};
-			elem.left.data = {element: elem};
-			elem.right.data = {element: elem};
+			elem.left.data = {element:elem, dialog:this};
+			elem.right.data = {element:elem, dialog:this};
 			this.buttons.push(elem.left, elem.right);
 			this.elements.push(elem);
 		}
@@ -354,14 +356,50 @@ namespace View {
 			cancel.moveTo(cursor.shifted(gutter, 0));
 			cancel.draw(ctx, cancel === this.hoveredButton);
 		}
+		
+		// mouse events
+		public onMouseMove(mouse: Util.Point) {
+			this.hoveredButton = Button.getHoveredButton(this.buttons, mouse);
+			View.drawPage();
+		}
+		public onMouseClick(mouse: Util.Point) {
+			this.hoveredButton.callback(this.hoveredButton);
+			View.drawPage();
+		}
+
+		// buttons
 		public btnTransfer(btn: Button): void {
-			console.log('btnTransfer');
+			let elem = btn.data.element;
+			if (btn === elem.left) {
+				if (elem.rightValue > 0) {
+					elem.rightValue--;
+					elem.leftValue++;
+				}
+			}
+			else {
+				if (elem.leftValue > 0) {
+					elem.leftValue--;
+					elem.rightValue++;
+				}
+			}
+			elem.left.caption = elem.leftName + ': ' + elem.leftValue;
+			elem.right.caption = elem.rightName + ': ' + elem.rightValue;
+			View.drawPage();
 		}
 		public btnOk(btn: Button): void {
 			console.log('btnOk');
+			console.log('button',btn);
+			// this.ok = true;
+			// this.callback(this);
+			btn.data.ok = true;
+			btn.data.callback(btn.data);
 		}
 		public btnCancel(btn: Button): void {
 			console.log('btnCancel');
+			// this.ok = false;
+			// this.callback(this);
+			btn.data.ok = false;
+			btn.data.callback(btn.data);
 		}
 	}
 
@@ -395,6 +433,7 @@ namespace View {
 			this.orientRootCards(Model.Model.factions);
 			this.drawPage();
 		}
+
 		public static dragFocus(delta: Util.Point) {
 			View.focus.move(delta.x, delta.y);
 		}
@@ -707,11 +746,6 @@ namespace View {
 			View.drawPage();
 		}
 		public static btnDone(button: Button) {
-
-			console.log('btnDone');
-			console.log('attack type',PageAttack.attackType);
-			console.log('PageAttack.state',AttackState[PageAttack.state]);
-
 			PageAttack.callback({command:'attackerDone'});
 			View.screenState = State.table;
 			if (PageAttack.state === AttackState.failure) {
@@ -893,6 +927,7 @@ namespace View {
 		private static callback: (any) => any;
 		public static buttons: Button[] = [];
 		static factionButtons: Button[] = [];
+		static dialogs: Dialog[] = [];
 		public static colors = {
 			headerFill: '#eee',
 		};
@@ -922,6 +957,15 @@ namespace View {
 				PageTable.factionButtons.push(btn);
 				cursor.movey(-14);
 			}
+			
+			let dialog = new Dialog('just a test', PageTable.dialogTest);
+			dialog.addTransfer('one',1,'two',2);
+			this.dialogs.push(dialog);
+
+		}
+
+		public static dialogTest(dlg: Dialog){
+			console.log('dialogTest',dlg);
 		}
 
 		public static get footerHeight () { return View.cardLength * 1.4; }
@@ -979,6 +1023,13 @@ namespace View {
 				CardView.drawHovered(View.hoveredCard,ctx);
 			}
 
+			// dialogs
+			for (let dlg of PageTable.dialogs) {
+				if (dlg.visible) {
+					dlg.draw(ctx);
+				}
+			}
+
 		}
 		
 		public static drawLinkChoice(closest){
@@ -992,6 +1043,12 @@ namespace View {
 
 		public static onMouseMove(mouse: Util.Point) {
 			PageTable.mouse = mouse;
+			for (let dlg of PageTable.dialogs) {
+				if (dlg.visible) {
+					dlg.onMouseMove(mouse);
+					return;
+				}
+			}
 			if(PageTable.state === TableState.chooseLink) {
 				let closest = null;
 				let sqDist = 0;
@@ -1032,6 +1089,12 @@ namespace View {
 			}
 		}
 		public static onMouseClick(mouse: Util.Point) {
+			for (let dlg of PageTable.dialogs) {
+				if (dlg.visible) {
+					dlg.onMouseClick(mouse);
+					return;
+				}
+			}
 			if (PageTable.state === TableState.chooseLink) {
 				// TODO: check for card overlap
 				if (PageTable.hoveredLink) { // place the card
@@ -1044,11 +1107,9 @@ namespace View {
 					View.drawPage();
 				}
 			}
-
 			else if (View.hoveredButton) {
 				View.hoveredButton.callback(View.hoveredButton);
 			}
-
 			else if (View.hoveredCard){
 				if (PageTable.callback({command:'commandIsAttack'})) {
 					View.canvas.style.cursor = '';
@@ -1063,7 +1124,6 @@ namespace View {
 					View.drawPage();
 				}
 			}
-
 		}
 	}
 }

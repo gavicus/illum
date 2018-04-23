@@ -762,6 +762,7 @@ namespace View {
 			Button.getButton(PageDetail.buttons, 'attack').sety(cursor.y);
 			for (let btn of PageDetail.buttons) {
 				if(btn.caption==='attack' && Control.Turn.actionsTaken >= 2){ continue; }
+				if(btn.caption==='move' && card.cardType === Model.CardType.root) { continue; }
 				btn.draw(ctx, btn === PageDetail.hoveredButton);
 			}
 		}
@@ -903,7 +904,16 @@ namespace View {
 			}
 			else {
 				let dirty = false;
-				let hovered = Model.Model.getHoveredCard(mouse, Model.Deck.tableCards);
+
+				let cardSet: Model.Card[];
+				if (PageTable.callback({command:'commandIsAttack'})) {
+					cardSet = Model.Deck.attackTargets;
+				}
+				else {
+					cardSet = Model.Deck.tableCards;
+				}
+
+				let hovered = Model.Model.getHoveredCard(mouse, cardSet);
 				if(hovered !== View.hoveredCard){
 					View.hoveredCard = hovered;
 					dirty = true;
@@ -917,14 +927,10 @@ namespace View {
 			}
 		}
 		public static onMouseClick(mouse: Util.Point) {
-			
-			
 			if (PageTable.state === TableState.chooseLink) {
 				// TODO: check for card overlap
 				if (PageTable.hoveredLink) { // place the card
-
 					let defender = PageAttack.callback({command:'getDefender'});
-
 					defender.decouple();
 					PageTable.hoveredLink.card.addCard(defender, PageTable.hoveredLink.linkIndex);
 					PageTable.callback({command:'clearCommand'});

@@ -370,6 +370,9 @@ var Model;
         static drawGroup() {
             return Deck.drawCard(Deck.cards, (card) => { return card.cardType === CardType.group; });
         }
+        static get attackTargets() {
+            return Deck.tableCards.filter((card) => card.cardType !== CardType.root);
+        }
         static get structureCards() {
             return Deck.cards.filter((card) => {
                 return card.cardLocation === CardLocation.structure
@@ -395,18 +398,39 @@ var Model;
         'root|Society of Assassins|+4 on any attempt to neutralize any group.|8|8|4|8||tbd',
         'root|UFOs|Illuminati group may participate in two attacks per turn.|6|6|4|8||tbd',
         // type|name|description|atk|def|links|income|alignments
+        'group|American Autoduel Association||1|5|1|1|Violent,Weird',
+        'group|Anti-Nuclear Activists|+2 on any attempt to destroy Nuclear Power Companies|2|5|1|1|Liberal',
         'group|Big Media||4/3|6|3|3|Straight,Liberal',
         'group|C.I.A.||6/4|5|3|0|Government,Violent',
         'group|California||5|4|2|5|Weird,Liberal,Government',
+        'group|Comic Books||1|1|1|2|Weird,Violent',
+        'group|Cycle Gangs|+2 on any attempt to destroy any group|0|4|0|0|Violent,Weird',
         'group|Democrats||5|4|2|3|Liberal',
+        'group|Eco-Guerrillas||0|6|0|1|Liberal,Violent,Weird',
         'group|F.B.I.||4/2|6|2|0|Government,Straight',
+        'group|Fnord Motor Company||2|4|1|2|Peaceful',
+        'group|Health Food Stores|+2 on any attempt to control Anti-Nuclear Activists|1|3|1|2|Liberal',
         'group|Hollywood||2|0|2|5|Liberal',
         'group|I.R.S.|Owning player may tax each opponent 2MB on his own income phase. Tax may come from any group. If a player has no money, he owes no tax.|5/3|5|2|*irs tax|Criminal,Government',
+        'group|International Cocaine Smugglers|+4 on any attempt to control Punk Rockers, Cycle Gangs or Hollywood|3|5|3|5|Criminal',
+        'group|Junk Mail|+4 on any attempt to control the Post Office|1|3|1|2|Criminal',
         'group|KGB||2/2|6|1|0|Communist,Violent',
+        'group|Loan Sharks||5|5|1|6|Criminal,Violent',
+        'group|Local Police Departments||0|4|0|1|Conservative,Straight,Violent',
         'group|Mafia||7|7|3|6|Criminal,Violent',
+        'group|Moral Minority||2|1|1|2|Conservative,Straight,Fanatic',
+        'group|Multinational Oil Companies||6|4|2|8|',
         'group|New York||7|8|3|3|Violent,Criminal,Government',
+        'group|Phone Company||5/2|6|2|3|',
+        'group|Phone Phreaks|+3 on any attempt to control, neutralize or destroy Phone Company|0/1|1|0|1|Criminal,Liberal',
+        'group|Professional Sports||2|4|2|3|Violent,Fanatic',
         'group|Republicans||4|4|3|4|Conservative',
+        'group|Semiconscious Liberation Army|+1 on any attempt to destroy any group|0|8|0|0|Criminal,Violent,Liberation,Weird,Communist',
+        'group|Tabloids|+3 for direct control of Convenience Stores.|2|3|1|3|Weird',
         'group|Texas||6|6|2|4|Violent,Conservative,Government',
+        'group|Trekkies||0|4|0|3|Weird,Fanatic',
+        'group|TV Preachers|+3 for direct control of the Moral Minority|3|6|2|4|Straight,Fanatic',
+        'group|Yuppies||1/1|4|1|5|Conservative',
     ];
     Model_1.Deck = Deck;
     class LinkTarget {
@@ -943,11 +967,11 @@ var View;
             let lineHeight = 15;
             let attacker = PageAttack.callback({ command: 'getAttacker' });
             let defender = PageAttack.callback({ command: 'getDefender' });
-            // TODO: compute target proximity to root card
-            // TODO: allow use of cash
             // TODO: disallow control attacks if attacker has no open out links
             // TODO: figure in card special abilities
             // TODO: newly-controlled cards get their cash halved
+            // TODO: make sure you can't attack the root directly
+            //		don't hilight a root when choosing a target
             let cursor = new Util.Point(leftMargin, lineHeight);
             ctx.fillStyle = CardView.colors.card.text;
             ctx.font = View.font;
@@ -1239,6 +1263,9 @@ var View;
                 if (btn.caption === 'attack' && Control.Turn.actionsTaken >= 2) {
                     continue;
                 }
+                if (btn.caption === 'move' && card.cardType === Model.CardType.root) {
+                    continue;
+                }
                 btn.draw(ctx, btn === PageDetail.hoveredButton);
             }
         }
@@ -1362,7 +1389,14 @@ var View;
             }
             else {
                 let dirty = false;
-                let hovered = Model.Model.getHoveredCard(mouse, Model.Deck.tableCards);
+                let cardSet;
+                if (PageTable.callback({ command: 'commandIsAttack' })) {
+                    cardSet = Model.Deck.attackTargets;
+                }
+                else {
+                    cardSet = Model.Deck.tableCards;
+                }
+                let hovered = Model.Model.getHoveredCard(mouse, cardSet);
                 if (hovered !== View.hoveredCard) {
                     View.hoveredCard = hovered;
                     dirty = true;

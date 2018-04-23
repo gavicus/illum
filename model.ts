@@ -282,6 +282,10 @@ namespace Model {
 			return Deck.drawCard(Deck.cards, (card) => {return card.cardType === CardType.group;})
 		}
 
+		static get attackTargets () {
+			return Deck.tableCards.filter((card) => card.cardType !== CardType.root);
+		}
+
 		static get structureCards () {
 			return Deck.cards.filter((card) => {
 				return card.cardLocation === CardLocation.structure

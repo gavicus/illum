@@ -1239,7 +1239,6 @@ var View;
                 cursor.movey(lineHeight * 2);
                 ctx.fillText('special bonuses:', cursor.x, cursor.y);
                 for (let spec of specials) {
-                    console.log('spec of specials', spec);
                     cursor.movey(lineHeight);
                     ctx.fillText(spec.name + ': ' + spec.bonus, cursor.x, cursor.y);
                 }
@@ -1320,7 +1319,6 @@ var View;
         }
         static get attackTotal() {
             let attacker = PageAttack.callback({ command: 'getAttacker' });
-            console.log('attack', attacker.attack, 'specialBonus', PageAttack.specialBonus);
             return attacker.attack + PageAttack.alignmentBonus + PageAttack.attackerCash + PageAttack.rootCash + PageAttack.specialBonus;
         }
         static get defenseAttribute() {

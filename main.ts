@@ -1,5 +1,7 @@
 // TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
 // TODO: if the card is a special, put it in the player's "hand"
+// TODO: disabled buttons should look disabled
+// TODO: on attack page, if no attack type is selected then execute should be disabled
 
 namespace Control {
 	export enum Command {attack, cashXfer, none, placeCard};

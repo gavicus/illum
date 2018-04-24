@@ -392,6 +392,13 @@ var Model;
         static drawGroup() {
             return Deck.drawCard(Deck.cards, (card) => { return card.cardType === CardType.group; });
         }
+        static getAdjacentCards(card) {
+            let cards = card.children;
+            if (card.parent) {
+                cards.push(card.parent);
+            }
+            return cards;
+        }
         static get attackTargets() {
             return Deck.tableCards.filter((card) => card.cardType !== CardType.root);
         }
@@ -834,18 +841,39 @@ var View;
             cancel.data = this;
             this.buttons.push(ok, cancel);
         }
-        addTransfer(nameOne, valueOne, nameTwo, valueTwo) {
+        addTransfer(id, nameOne, valueOne, nameTwo, valueTwo) {
+            let name1 = nameOne.substr(0, 10);
+            let name2 = nameTwo.substr(0, 10);
             let elem = {
                 type: ElementType.transfer,
-                left: new Button(nameOne + ': ' + valueOne, this.btnTransfer, new Util.Point()),
-                right: new Button(nameTwo + ': ' + valueTwo, this.btnTransfer, new Util.Point()),
-                leftName: nameOne, leftValue: valueOne,
-                rightName: nameTwo, rightValue: valueTwo,
+                id: id,
+                left: new Button(name1 + ': ' + valueOne, this.btnTransfer, new Util.Point()),
+                right: new Button(name2 + ': ' + valueTwo, this.btnTransfer, new Util.Point()),
+                leftName: name1, leftValue: valueOne,
+                rightName: name2, rightValue: valueTwo,
             };
             elem.left.data = { element: elem, dialog: this };
             elem.right.data = { element: elem, dialog: this };
             this.buttons.push(elem.left, elem.right);
             this.elements.push(elem);
+        }
+        configureTransfer(id, nameOne, valueOne, nameTwo, valueTwo) {
+            let name1 = nameOne.substr(0, 10);
+            let name2 = nameTwo.substr(0, 10);
+            let xfer = null;
+            for (let elem of this.elements) {
+                if (elem.id === id) {
+                    xfer = elem;
+                    break;
+                }
+            }
+            if (xfer) {
+                xfer.leftName = name1;
+                xfer.leftValue = valueOne;
+                xfer.rightName = name2;
+                xfer.rightValue = valueTwo;
+                this.updateTransferButtons(xfer);
+            }
         }
         draw(ctx) {
             let cWidth = View.canvas.width;
@@ -886,6 +914,17 @@ var View;
             cancel.moveTo(cursor.shifted(gutter, 0));
             cancel.draw(ctx, cancel === this.hoveredButton);
         }
+        updateTransferButtons(elem) {
+            elem.left.caption = elem.leftName + ': ' + elem.leftValue;
+            elem.right.caption = elem.rightName + ': ' + elem.rightValue;
+        }
+        get data() {
+            let data = {};
+            for (let elem of this.elements) {
+                data[elem.id] = elem;
+            }
+            return data;
+        }
         // mouse events
         onMouseMove(mouse) {
             this.hoveredButton = Button.getHoveredButton(this.buttons, mouse);
@@ -910,24 +949,23 @@ var View;
                     elem.rightValue++;
                 }
             }
-            elem.left.caption = elem.leftName + ': ' + elem.leftValue;
-            elem.right.caption = elem.rightName + ': ' + elem.rightValue;
+            btn.data.dialog.updateTransferButtons(elem);
             View.drawPage();
         }
         btnOk(btn) {
-            console.log('btnOk');
-            console.log('button', btn);
-            // this.ok = true;
-            // this.callback(this);
             btn.data.ok = true;
             btn.data.callback(btn.data);
         }
         btnCancel(btn) {
-            console.log('btnCancel');
-            // this.ok = false;
-            // this.callback(this);
             btn.data.ok = false;
             btn.data.callback(btn.data);
+        }
+        static getDialog(dialogSet, name) {
+            for (let dlg of dialogSet) {
+                if (dlg.caption === name) {
+                    return dlg;
+                }
+            }
         }
     }
     Dialog.lineHeight = 30;
@@ -1277,7 +1315,6 @@ var View;
                 PageAttack.callback({ command: 'cancelAttack' });
             }
             else if (PageAttack.attackType === 'control') {
-                console.log('btnDone calling controlSuccess because attack state is', AttackState[PageAttack.state]);
                 PageAttack.callback({ command: 'controlSuccess' });
             }
             else if (PageAttack.attackType === 'neutralize') {
@@ -1344,6 +1381,7 @@ var View;
             PageDetail.buttons = [
                 new Button('move', PageDetail.btnMoveGroup, new Util.Point(20, 100), 'move'),
                 new Button('attack', PageDetail.btnAttack, new Util.Point(25 + Button.size.x, 100), 'attack'),
+                new Button('cash xfer', PageDetail.btnCashXfer, new Util.Point(30 + Button.size.x * 2, 100), 'cashXfer'),
             ];
         }
         static draw(ctx) {
@@ -1410,12 +1448,19 @@ var View;
             cursor.movey(lineHeight * 2);
             Button.getButton(PageDetail.buttons, 'move').sety(cursor.y);
             Button.getButton(PageDetail.buttons, 'attack').sety(cursor.y);
+            Button.getButton(PageDetail.buttons, 'cashXfer').sety(cursor.y);
             for (let btn of PageDetail.buttons) {
                 if (btn.caption === 'attack' && Control.Turn.actionsTaken >= 2) {
                     continue;
                 }
                 if (btn.caption === 'move' && card.cardType === Model.CardType.root) {
                     continue;
+                }
+                if (btn.caption === 'cash xfer') {
+                    let adjacent = Model.Deck.getAdjacentCards(card);
+                    if (adjacent.length === 0) {
+                        continue;
+                    }
                 }
                 btn.draw(ctx, btn === PageDetail.hoveredButton);
             }
@@ -1439,6 +1484,9 @@ var View;
         }
         static btnAttack(btn) {
             PageDetail.callback({ command: 'btnAttack' })(btn);
+        }
+        static btnCashXfer(btn) {
+            PageDetail.callback({ command: 'btnCashXfer' })(btn);
         }
     }
     PageDetail.buttons = [];
@@ -1465,12 +1513,18 @@ var View;
                 PageTable.factionButtons.push(btn);
                 cursor.movey(-14);
             }
-            let dialog = new Dialog('just a test', PageTable.dialogTest);
-            dialog.addTransfer('one', 1, 'two', 2);
+            let dialog = new Dialog('transfer cash', PageTable.cashXferCallback);
+            dialog.addTransfer('cashXfer', 'one', 1, 'two', 2);
             this.dialogs.push(dialog);
         }
-        static dialogTest(dlg) {
+        static cashXferCallback(dlg) {
             console.log('dialogTest', dlg);
+            if (dlg.ok) {
+                let data = dlg.data;
+                PageTable.callback({ command: 'cashXferFinish', value: data });
+            }
+            dlg.visible = false;
+            View.drawPage();
         }
         static get footerHeight() { return View.cardLength * 1.4; }
         static draw(ctx) {
@@ -1521,6 +1575,11 @@ var View;
                     ctx.stroke();
                 }
             }
+            else if (Control.Control.command === Control.Command.cashXfer) {
+                if (View.hoveredCard && PageTable.cardTargets.indexOf(View.hoveredCard) !== -1) {
+                    CardView.drawHovered(View.hoveredCard, ctx);
+                }
+            }
             else if (View.hoveredCard) {
                 CardView.drawHovered(View.hoveredCard, ctx);
             }
@@ -1540,6 +1599,11 @@ var View;
             View.context.arc(closest.point.x, closest.point.y, View.getArcSize(), 0, 2 * Math.PI, false);
             View.context.strokeStyle = 'red';
             View.context.stroke();
+        }
+        static openCashXferDialog() {
+            let dlg = Dialog.getDialog(PageTable.dialogs, 'transfer cash');
+            let xfer = dlg.configureTransfer('cashXfer', Control.Attack.attacker.name, Control.Attack.attacker.cash, Control.Attack.defender.name, Control.Attack.defender.cash);
+            dlg.visible = true;
         }
         static onMouseMove(mouse) {
             PageTable.mouse = mouse;
@@ -1597,7 +1661,10 @@ var View;
                     return;
                 }
             }
-            if (PageTable.state === TableState.chooseLink) {
+            if (Control.Control.command === Control.Command.cashXfer) {
+                PageTable.callback({ command: 'cashXferTarget' });
+            }
+            else if (PageTable.state === TableState.chooseLink) {
                 // TODO: check for card overlap
                 if (PageTable.hoveredLink) {
                     let defender = PageAttack.callback({ command: 'getDefender' });
@@ -1605,7 +1672,7 @@ var View;
                     PageTable.hoveredLink.card.addCard(defender, PageTable.hoveredLink.linkIndex);
                     PageTable.callback({ command: 'clearCommand' });
                     PageTable.state = TableState.normal;
-                    View.canvas.style.cursor = 'arrow';
+                    View.canvas.style.cursor = '';
                     View.drawPage();
                 }
             }
@@ -1643,9 +1710,10 @@ var Control;
 (function (Control_1) {
     let Command;
     (function (Command) {
-        Command[Command["none"] = 0] = "none";
-        Command[Command["placeCard"] = 1] = "placeCard";
-        Command[Command["attack"] = 2] = "attack";
+        Command[Command["attack"] = 0] = "attack";
+        Command[Command["cashXfer"] = 1] = "cashXfer";
+        Command[Command["none"] = 2] = "none";
+        Command[Command["placeCard"] = 3] = "placeCard";
     })(Command = Control_1.Command || (Control_1.Command = {}));
     ;
     class Control {
@@ -1702,10 +1770,14 @@ var Control;
                     Attack.setDefender(data.value);
                     break;
                 case 'clearCommand':
-                    this.command = Command.none;
+                    Control.command = Command.none;
                     break;
                 case 'btnEndTurn': return Control.btnEndTurn;
                 case 'btnShowFaction': return Control.btnShowFaction;
+                case 'cashXferTarget':
+                    Control.beginCashXfer();
+                    break;
+                case 'cashXferFinish': return Control.cashXferFinish(data.value);
             }
         }
         static detailCallback(data) {
@@ -1713,7 +1785,22 @@ var Control;
             switch (data.command) {
                 case 'btnMoveGroup': return Control.btnMoveGroup;
                 case 'btnAttack': return Control.btnAttack;
+                case 'btnCashXfer': return Control.btnCashXfer;
             }
+        }
+        static beginCashXfer() {
+            console.log('beginCashXfer');
+            Attack.setDefender(View.View.hoveredCard);
+            View.PageTable.openCashXferDialog();
+            View.View.canvas.style.cursor = '';
+            View.View.drawPage();
+        }
+        static cashXferFinish(values) {
+            console.log('cashXferFinish', values);
+            Attack.attacker.cash = values.cashXfer.leftValue;
+            Attack.defender.cash = values.cashXfer.rightValue;
+            Control.command = Command.none;
+            View.View.drawPage();
         }
         static beginChooseLink(cardToPlace, cardSet = Model.Deck.structureCards) {
             View.View.screenState = View.State.table;
@@ -1724,6 +1811,9 @@ var Control;
         static beginChooseTarget() {
             View.View.screenState = View.State.table;
             View.View.canvas.style.cursor = 'crosshair';
+            if (Control.command === Command.cashXfer) {
+                View.PageTable.cardTargets = Model.Deck.getAdjacentCards(Attack.attacker);
+            }
             View.View.drawPage();
         }
         static cancelAttack() {
@@ -1736,7 +1826,6 @@ var Control;
             View.View.drawPage();
         }
         static controlSuccess() {
-            console.log('public static controlSuccess');
             Control.command = Command.none;
             Control.restoreTableState();
             Attack.defender.faction = Attack.attacker.faction;
@@ -1784,6 +1873,11 @@ var Control;
         static btnAttack(button) {
             Attack.setAttacker(View.View.hoveredCard);
             Control.command = Command.attack;
+            Control.beginChooseTarget();
+        }
+        static btnCashXfer(button) {
+            Attack.setAttacker(View.View.hoveredCard);
+            Control.command = Command.cashXfer;
             Control.beginChooseTarget();
         }
         static btnMoveGroup(button) {

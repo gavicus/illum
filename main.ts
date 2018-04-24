@@ -2,7 +2,7 @@
 // TODO: if the card is a special, put it in the player's "hand"
 
 namespace Control {
-	export enum Command {none, placeCard, attack};
+	export enum Command {attack, cashXfer, none, placeCard};
 
 	export class Control {
 		public static linkTargets: Model.LinkTarget[];
@@ -58,9 +58,11 @@ namespace Control {
 			switch(data.command) {
 				case 'commandIsAttack': return Control.command == Command.attack;
 				case 'setDefender': Attack.setDefender(data.value); break;
-				case 'clearCommand': this.command = Command.none; break;
+				case 'clearCommand': Control.command = Command.none; break;
 				case 'btnEndTurn': return Control.btnEndTurn;
 				case 'btnShowFaction': return Control.btnShowFaction;
+				case 'cashXferTarget': Control.beginCashXfer(); break;
+				case 'cashXferFinish': return Control.cashXferFinish(data.value);
 			}
 		}
 		public static detailCallback(data): any {
@@ -70,9 +72,26 @@ namespace Control {
 			switch (data.command) {
 				case 'btnMoveGroup': return Control.btnMoveGroup;
 				case 'btnAttack': return Control.btnAttack;
+				case 'btnCashXfer': return Control.btnCashXfer;
 			}
 		}
 
+		public static beginCashXfer(): void {
+
+			console.log('beginCashXfer');
+
+			Attack.setDefender(View.View.hoveredCard);
+			View.PageTable.openCashXferDialog();
+			View.View.canvas.style.cursor = '';
+			View.View.drawPage();
+		}
+		public static cashXferFinish(values): void {
+			console.log('cashXferFinish',values);
+			Attack.attacker.cash = values.cashXfer.leftValue;
+			Attack.defender.cash = values.cashXfer.rightValue;
+			Control.command = Command.none;
+			View.View.drawPage();
+		}
 		public static beginChooseLink(cardToPlace: Model.Card, cardSet: Model.Card[] = Model.Deck.structureCards){
 			View.View.screenState = View.State.table;
 			View.PageTable.state = View.TableState.chooseLink;
@@ -82,6 +101,9 @@ namespace Control {
 		public static beginChooseTarget(){
 			View.View.screenState = View.State.table;
 			View.View.canvas.style.cursor = 'crosshair';
+			if (Control.command === Command.cashXfer) {
+				View.PageTable.cardTargets = Model.Deck.getAdjacentCards(Attack.attacker);
+			}
 			View.View.drawPage();
 		}
 		public static cancelAttack() {
@@ -94,9 +116,6 @@ namespace Control {
 			View.View.drawPage();
 		}
 		public static controlSuccess() {
-
-			console.log('public static controlSuccess');
-
 			Control.command = Command.none;
 			Control.restoreTableState();
 			Attack.defender.faction = Attack.attacker.faction;
@@ -146,6 +165,11 @@ namespace Control {
 		public static btnAttack(button: View.Button) {
 			Attack.setAttacker(View.View.hoveredCard);
 			Control.command = Command.attack;
+			Control.beginChooseTarget();
+		}
+		public static btnCashXfer(button: View.Button) {
+			Attack.setAttacker(View.View.hoveredCard);
+			Control.command = Command.cashXfer;
 			Control.beginChooseTarget();
 		}
 		public static btnMoveGroup(button: View.Button) {

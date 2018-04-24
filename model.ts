@@ -291,6 +291,12 @@ namespace Model {
 			return Deck.drawCard(Deck.cards, (card) => {return card.cardType === CardType.group;})
 		}
 
+		static getAdjacentCards(card: Card): Card[] {
+			let cards: Card[] = card.children;
+			if (card.parent) { cards.push(card.parent); }
+			return cards;
+		}
+
 		static get attackTargets () {
 			return Deck.tableCards.filter((card) => card.cardType !== CardType.root);
 		}

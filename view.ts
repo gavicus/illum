@@ -294,18 +294,39 @@ namespace View {
 			this.buttons.push(ok,cancel);
 		}
 
-		public addTransfer(nameOne: string, valueOne: number, nameTwo: string, valueTwo: number): void {
+		public addTransfer(id: string, nameOne: string, valueOne: number, nameTwo: string, valueTwo: number): void {
+			let name1 = nameOne.substr(0,10);
+			let name2 = nameTwo.substr(0,10);
 			let elem = {
 				type:ElementType.transfer,
-				left: new Button(nameOne+': '+valueOne, this.btnTransfer, new Util.Point()),
-				right: new Button(nameTwo+': '+valueTwo, this.btnTransfer, new Util.Point()),
-				leftName: nameOne, leftValue: valueOne,
-				rightName: nameTwo, rightValue: valueTwo,
+				id: id,
+				left: new Button(name1+': '+valueOne, this.btnTransfer, new Util.Point()),
+				right: new Button(name2+': '+valueTwo, this.btnTransfer, new Util.Point()),
+				leftName: name1, leftValue: valueOne,
+				rightName: name2, rightValue: valueTwo,
 			};
 			elem.left.data = {element:elem, dialog:this};
 			elem.right.data = {element:elem, dialog:this};
 			this.buttons.push(elem.left, elem.right);
 			this.elements.push(elem);
+		}
+		public configureTransfer(id: string, nameOne: string, valueOne: number, nameTwo: string, valueTwo: number): void {
+			let name1 = nameOne.substr(0,10);
+			let name2 = nameTwo.substr(0,10);
+			let xfer = null;
+			for (let elem of this.elements) {
+				if (elem.id === id) {
+					xfer = elem;
+					break;
+				}
+			}
+			if (xfer) {
+				xfer.leftName = name1;
+				xfer.leftValue = valueOne;
+				xfer.rightName = name2;
+				xfer.rightValue = valueTwo;
+				this.updateTransferButtons(xfer);
+			}
 		}
 		public draw(ctx: CanvasRenderingContext2D): void {
 			let cWidth = View.canvas.width;
@@ -356,7 +377,18 @@ namespace View {
 			cancel.moveTo(cursor.shifted(gutter, 0));
 			cancel.draw(ctx, cancel === this.hoveredButton);
 		}
-		
+		public updateTransferButtons(elem: any): void {
+			elem.left.caption = elem.leftName + ': ' + elem.leftValue;
+			elem.right.caption = elem.rightName + ': ' + elem.rightValue;
+		}
+		public get data(): any {
+			let data = {};
+			for (let elem of this.elements) {
+				data[elem.id] = elem;
+			}
+			return data;
+		}
+
 		// mouse events
 		public onMouseMove(mouse: Util.Point) {
 			this.hoveredButton = Button.getHoveredButton(this.buttons, mouse);
@@ -382,24 +414,24 @@ namespace View {
 					elem.rightValue++;
 				}
 			}
-			elem.left.caption = elem.leftName + ': ' + elem.leftValue;
-			elem.right.caption = elem.rightName + ': ' + elem.rightValue;
+			btn.data.dialog.updateTransferButtons(elem);
 			View.drawPage();
 		}
 		public btnOk(btn: Button): void {
-			console.log('btnOk');
-			console.log('button',btn);
-			// this.ok = true;
-			// this.callback(this);
 			btn.data.ok = true;
 			btn.data.callback(btn.data);
 		}
 		public btnCancel(btn: Button): void {
-			console.log('btnCancel');
-			// this.ok = false;
-			// this.callback(this);
 			btn.data.ok = false;
 			btn.data.callback(btn.data);
+		}
+	
+		public static getDialog(dialogSet: Dialog[], name: string): Dialog {
+			for (let dlg of dialogSet) {
+				if (dlg.caption === name) {
+					return dlg;
+				}
+			}
 		}
 	}
 
@@ -752,7 +784,6 @@ namespace View {
 				PageAttack.callback({command:'cancelAttack'});
 			}
 			else if (PageAttack.attackType === 'control') {
-				console.log('btnDone calling controlSuccess because attack state is',AttackState[PageAttack.state]);
 				PageAttack.callback({command:'controlSuccess'});
 			}
 			else if (PageAttack.attackType === 'neutralize') {
@@ -819,6 +850,7 @@ namespace View {
 			PageDetail.buttons = [
 				new Button('move', PageDetail.btnMoveGroup, new Util.Point(20, 100), 'move'),
 				new Button('attack', PageDetail.btnAttack, new Util.Point(25+Button.size.x,100), 'attack'),
+				new Button('cash xfer', PageDetail.btnCashXfer, new Util.Point(30+Button.size.x*2,100), 'cashXfer'),
 			];
 		}
 		public static draw(ctx: CanvasRenderingContext2D) {
@@ -890,9 +922,14 @@ namespace View {
 			cursor.movey(lineHeight*2);
 			Button.getButton(PageDetail.buttons, 'move').sety(cursor.y);
 			Button.getButton(PageDetail.buttons, 'attack').sety(cursor.y);
+			Button.getButton(PageDetail.buttons, 'cashXfer').sety(cursor.y);
 			for (let btn of PageDetail.buttons) {
-				if(btn.caption==='attack' && Control.Turn.actionsTaken >= 2){ continue; }
-				if(btn.caption==='move' && card.cardType === Model.CardType.root) { continue; }
+				if(btn.caption === 'attack' && Control.Turn.actionsTaken >= 2){ continue; }
+				if(btn.caption === 'move' && card.cardType === Model.CardType.root) { continue; }
+				if (btn.caption === 'cash xfer') {
+					let adjacent = Model.Deck.getAdjacentCards(card);
+					if (adjacent.length === 0) { continue; }
+				}
 				btn.draw(ctx, btn === PageDetail.hoveredButton);
 			}
 		}
@@ -912,17 +949,21 @@ namespace View {
 			}
 		}
 	
-		public static btnMoveGroup(btn: Button) {
+		public static btnMoveGroup(btn: Button): void {
 			PageDetail.callback({command:'btnMoveGroup'})(btn);
 		}
-		public static btnAttack(btn: Button) {
+		public static btnAttack(btn: Button): void {
 			PageDetail.callback({command:'btnAttack'})(btn);
+		}
+		public static btnCashXfer(btn: Button): void {
+			PageDetail.callback({command:'btnCashXfer'})(btn);
 		}
 	}
 	export class PageTable {
 		public static state: TableState;
 		public static mouse: Util.Point;
 		public static linkTargets: Model.LinkTarget[];
+		public static cardTargets: Model.Card[];
 		public static hoveredLink: Model.LinkTarget = null;
 		private static callback: (any) => any;
 		public static buttons: Button[] = [];
@@ -958,14 +999,20 @@ namespace View {
 				cursor.movey(-14);
 			}
 			
-			let dialog = new Dialog('just a test', PageTable.dialogTest);
-			dialog.addTransfer('one',1,'two',2);
+			let dialog = new Dialog('transfer cash', PageTable.cashXferCallback);
+			dialog.addTransfer('cashXfer','one',1,'two',2);
 			this.dialogs.push(dialog);
 
 		}
 
-		public static dialogTest(dlg: Dialog){
+		public static cashXferCallback(dlg: Dialog){
 			console.log('dialogTest',dlg);
+			if (dlg.ok) {
+				let data = dlg.data;
+				PageTable.callback({command:'cashXferFinish', value:data});
+			}
+			dlg.visible = false;
+			View.drawPage();
 		}
 
 		public static get footerHeight () { return View.cardLength * 1.4; }
@@ -1019,6 +1066,11 @@ namespace View {
 					ctx.stroke();
 				}
 			}
+			else if (Control.Control.command === Control.Command.cashXfer) {
+				if(View.hoveredCard && PageTable.cardTargets.indexOf(View.hoveredCard) !== -1) {
+					CardView.drawHovered(View.hoveredCard,ctx);
+				}
+			}
 			else if (View.hoveredCard){
 				CardView.drawHovered(View.hoveredCard,ctx);
 			}
@@ -1041,6 +1093,15 @@ namespace View {
 			View.context.stroke();
 		}
 
+		public static openCashXferDialog(): void {
+			let dlg = Dialog.getDialog(PageTable.dialogs, 'transfer cash');
+			let xfer = dlg.configureTransfer(
+				'cashXfer',
+				Control.Attack.attacker.name, Control.Attack.attacker.cash,
+				Control.Attack.defender.name, Control.Attack.defender.cash,
+			);
+			dlg.visible = true;
+		}
 		public static onMouseMove(mouse: Util.Point) {
 			PageTable.mouse = mouse;
 			for (let dlg of PageTable.dialogs) {
@@ -1095,7 +1156,10 @@ namespace View {
 					return;
 				}
 			}
-			if (PageTable.state === TableState.chooseLink) {
+			if (Control.Control.command === Control.Command.cashXfer) {
+				PageTable.callback({command:'cashXferTarget'});
+			}
+			else if (PageTable.state === TableState.chooseLink) {
 				// TODO: check for card overlap
 				if (PageTable.hoveredLink) { // place the card
 					let defender = PageAttack.callback({command:'getDefender'});
@@ -1103,7 +1167,7 @@ namespace View {
 					PageTable.hoveredLink.card.addCard(defender, PageTable.hoveredLink.linkIndex);
 					PageTable.callback({command:'clearCommand'});
 					PageTable.state = TableState.normal;
-					View.canvas.style.cursor = 'arrow';
+					View.canvas.style.cursor = '';
 					View.drawPage();
 				}
 			}

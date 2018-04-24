@@ -543,6 +543,7 @@ namespace View {
 		public static attackType = 'control';
 		public static attackerCash = 0;
 		public static rootCash = 0;
+		public static specialBonus = 0;
 		public static roll = 0;
 		public static callback: (data:any) => any;
 		public static colors = {
@@ -631,6 +632,18 @@ namespace View {
 			defLine += ' (' + defender.alignments + ')';
 			ctx.fillText(defLine, cursor.x, cursor.y);
 
+			// compute special bonuses
+			let specials = [];
+			PageAttack.specialBonus = 0;
+			let directBonus = attacker.getSpecialBonus('direct', PageAttack.attackType, defender);
+			PageAttack.specialBonus += directBonus;
+			if (directBonus > 0) { specials.push({name:attacker.name, bonus:directBonus}); }
+			for (let fc of Model.Deck.getFactionCards(attacker.faction)) {
+				let bonus = fc.getSpecialBonus('any', PageAttack.attackType, defender);
+				PageAttack.specialBonus += bonus;
+				if (bonus > 0) { specials.push({name:fc.name, bonus:bonus}); }
+			}
+
 			// totals
 			cursor.movey(lineHeight*2);
 			let cursor2 = cursor.clone();
@@ -640,11 +653,24 @@ namespace View {
 			cursor.movey(lineHeight);
 			ctx.fillText('roll needed: '+ (PageAttack.attackTotal - PageAttack.defenseTotal) + ' or less', cursor.x, cursor.y);
 
-			// show bonuses
-			cursor2.movex(120);
-			ctx.fillText('alignment bonus: ' + PageAttack.alignmentBonus, cursor2.x, cursor2.y);
-			cursor2.movey(lineHeight);
-			ctx.fillText('illuminati defense: ' + 0, cursor2.x, cursor2.y); // TODO
+			// align and illuminati bonuses
+			cursor.movey(lineHeight*2);
+			ctx.fillText('alignment bonus: ' + PageAttack.alignmentBonus, cursor.x, cursor.y);
+			cursor.movey(lineHeight);
+			ctx.fillText('illuminati defense: ' + 0, cursor.x, cursor.y);
+
+			// show special bonuses
+			if (specials.length > 0) {
+				cursor.movey(lineHeight*2);
+				ctx.fillText('special bonuses:', cursor.x, cursor.y);
+				for (let spec of specials) {
+
+					console.log('spec of specials',spec);
+
+					cursor.movey(lineHeight);
+					ctx.fillText(spec.name+': '+spec.bonus, cursor.x, cursor.y);
+				}
+			}
 
 			// results
 			cursor.movey(lineHeight*2);
@@ -724,7 +750,10 @@ namespace View {
 		}
 		public static get attackTotal() {
 			let attacker = PageAttack.callback({command:'getAttacker'});
-			return attacker.attack + PageAttack.alignmentBonus + PageAttack.attackerCash + PageAttack.rootCash;
+
+			console.log('attack',attacker.attack,'specialBonus',PageAttack.specialBonus);
+
+			return attacker.attack + PageAttack.alignmentBonus + PageAttack.attackerCash + PageAttack.rootCash + PageAttack.specialBonus;
 		}
 		public static get defenseAttribute() {
 			let defender = PageAttack.callback({command:'getDefender'});
@@ -1010,7 +1039,6 @@ namespace View {
 		}
 
 		public static cashXferCallback(dlg: Dialog){
-			console.log('dialogTest',dlg);
 			let data = dlg.data;
 			PageTable.callback({command:'cashXferFinish', value:dlg});
 			dlg.visible = false;

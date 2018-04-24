@@ -371,6 +371,31 @@ var Model;
             }
             return 0;
         }
+        getSpecialBonus(scope, atkType, target) {
+            for (let special of this.specials) {
+                let bonus = parseInt(special.bonus);
+                if (special.scope !== scope) {
+                    continue;
+                }
+                if (special.type !== atkType) {
+                    continue;
+                }
+                if (special.selector === 'align') {
+                    if (target.alignments.indexOf(special.value) !== -1) {
+                        return bonus;
+                    }
+                }
+                if (special.selector === 'group') {
+                    if (special.value === 'any') {
+                        return bonus;
+                    }
+                    if (special.value === target.id) {
+                        return bonus;
+                    }
+                }
+            }
+            return 0;
+        }
     }
     Model_1.Card = Card;
     class Deck {
@@ -406,6 +431,12 @@ var Model;
             }
             return cards;
         }
+        static getFactionCards(faction) {
+            return Deck.cards.filter((card) => {
+                return card.cardLocation === CardLocation.structure
+                    && card.faction === faction;
+            });
+        }
         static get attackTargets() {
             return Deck.tableCards.filter((card) => card.cardType !== CardType.root);
         }
@@ -427,7 +458,7 @@ var Model;
         // type|id|name|description|atk|def|links|income|alignments|special
         'root|bi|Bavarian Illuminati|May make one privileged attack each turn at a cost of 5MB|10|10|4|9||',
         'root|bt|Bermuda Triangle|May reorganize your groups freely at end of turn|8|8|4|9||',
-        'root|ds|Discordian Society|+4 on any attempt to control Weird groups. Immune to attacks from Government or Straight groups.|8|8|4|8||[{"scope":"any","type":"control","bonus":"4","selector":"align","value":"weird"}]',
+        'root|ds|Discordian Society|+4 on any attempt to control Weird groups. Immune to attacks from Government or Straight groups.|8|8|4|8||[{"scope":"any","type":"control","bonus":"4","selector":"align","value":"Weird"}]',
         'root|gz|Gnomes of Zurich|May move money freely at end of turn|7|7|4|12||',
         'root|ne|Network|Turns over two cards at beginning of turn|7|7|4|9||',
         'root|sc|Servants of Cthulhu|+2 on any attempt to destroy any group.|9|9|4|7||[{"scope":"any","type":"destroy","bonus":"2","selector":"group","value":"any"}]',
@@ -1175,6 +1206,21 @@ var View;
             let defLine = 'defender: ' + defender.name + ' (' + PageAttack.defenseAttribute + ')';
             defLine += ' (' + defender.alignments + ')';
             ctx.fillText(defLine, cursor.x, cursor.y);
+            // compute special bonuses
+            let specials = [];
+            PageAttack.specialBonus = 0;
+            let directBonus = attacker.getSpecialBonus('direct', PageAttack.attackType, defender);
+            PageAttack.specialBonus += directBonus;
+            if (directBonus > 0) {
+                specials.push({ name: attacker.name, bonus: directBonus });
+            }
+            for (let fc of Model.Deck.getFactionCards(attacker.faction)) {
+                let bonus = fc.getSpecialBonus('any', PageAttack.attackType, defender);
+                PageAttack.specialBonus += bonus;
+                if (bonus > 0) {
+                    specials.push({ name: fc.name, bonus: bonus });
+                }
+            }
             // totals
             cursor.movey(lineHeight * 2);
             let cursor2 = cursor.clone();
@@ -1183,11 +1229,21 @@ var View;
             ctx.fillText('total defense: ' + PageAttack.defenseTotal, cursor.x, cursor.y);
             cursor.movey(lineHeight);
             ctx.fillText('roll needed: ' + (PageAttack.attackTotal - PageAttack.defenseTotal) + ' or less', cursor.x, cursor.y);
-            // show bonuses
-            cursor2.movex(120);
-            ctx.fillText('alignment bonus: ' + PageAttack.alignmentBonus, cursor2.x, cursor2.y);
-            cursor2.movey(lineHeight);
-            ctx.fillText('illuminati defense: ' + 0, cursor2.x, cursor2.y); // TODO
+            // align and illuminati bonuses
+            cursor.movey(lineHeight * 2);
+            ctx.fillText('alignment bonus: ' + PageAttack.alignmentBonus, cursor.x, cursor.y);
+            cursor.movey(lineHeight);
+            ctx.fillText('illuminati defense: ' + 0, cursor.x, cursor.y);
+            // show special bonuses
+            if (specials.length > 0) {
+                cursor.movey(lineHeight * 2);
+                ctx.fillText('special bonuses:', cursor.x, cursor.y);
+                for (let spec of specials) {
+                    console.log('spec of specials', spec);
+                    cursor.movey(lineHeight);
+                    ctx.fillText(spec.name + ': ' + spec.bonus, cursor.x, cursor.y);
+                }
+            }
             // results
             cursor.movey(lineHeight * 2);
             if (PageAttack.roll > 0) {
@@ -1264,7 +1320,8 @@ var View;
         }
         static get attackTotal() {
             let attacker = PageAttack.callback({ command: 'getAttacker' });
-            return attacker.attack + PageAttack.alignmentBonus + PageAttack.attackerCash + PageAttack.rootCash;
+            console.log('attack', attacker.attack, 'specialBonus', PageAttack.specialBonus);
+            return attacker.attack + PageAttack.alignmentBonus + PageAttack.attackerCash + PageAttack.rootCash + PageAttack.specialBonus;
         }
         static get defenseAttribute() {
             let defender = PageAttack.callback({ command: 'getDefender' });
@@ -1377,6 +1434,7 @@ var View;
     PageAttack.attackType = 'control';
     PageAttack.attackerCash = 0;
     PageAttack.rootCash = 0;
+    PageAttack.specialBonus = 0;
     PageAttack.roll = 0;
     PageAttack.colors = {
         text: 'gray',
@@ -1533,7 +1591,6 @@ var View;
             this.dialogs.push(dialog);
         }
         static cashXferCallback(dlg) {
-            console.log('dialogTest', dlg);
             let data = dlg.data;
             PageTable.callback({ command: 'cashXferFinish', value: dlg });
             dlg.visible = false;
@@ -1797,7 +1854,6 @@ var Control;
             }
         }
         static detailCallback(data) {
-            console.log('detailCallback', data);
             switch (data.command) {
                 case 'btnMoveGroup': return Control.btnMoveGroup;
                 case 'btnAttack': return Control.btnAttack;

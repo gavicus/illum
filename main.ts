@@ -69,9 +69,6 @@ namespace Control {
 			}
 		}
 		public static detailCallback(data): any {
-
-			console.log('detailCallback',data);
-
 			switch (data.command) {
 				case 'btnMoveGroup': return Control.btnMoveGroup;
 				case 'btnAttack': return Control.btnAttack;

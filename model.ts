@@ -78,7 +78,7 @@ namespace Model {
 		alignments: string[];
 		cardLocation: CardLocation;
 		cardType: CardType;
-		specials: string[] = [];
+		specials: any[] = [];
 
 		constructor(name: string, links: number=4) {
 			this.name = name;
@@ -216,6 +216,23 @@ namespace Model {
 			if(cursor.cardType === CardType.root) { return 2; }
 			return 0;
 		}
+		getSpecialBonus(scope:string, atkType:string, target:Card): number {
+			for (let special of this.specials) {
+				let bonus = parseInt(special.bonus);
+				if (special.scope !== scope) { continue; }
+				if (special.type !== atkType) { continue; }
+				if (special.selector === 'align') {
+					if (target.alignments.indexOf(special.value) !== -1) {
+						return bonus;
+					}
+				}
+				if (special.selector === 'group') {
+					if (special.value === 'any') { return bonus; }
+					if (special.value === target.id) { return bonus; }
+				}
+			}
+			return 0;
+		}
 	}
 
 	export class Deck {
@@ -224,7 +241,7 @@ namespace Model {
 				// type|id|name|description|atk|def|links|income|alignments|special
 				'root|bi|Bavarian Illuminati|May make one privileged attack each turn at a cost of 5MB|10|10|4|9||',
 				'root|bt|Bermuda Triangle|May reorganize your groups freely at end of turn|8|8|4|9||',
-				'root|ds|Discordian Society|+4 on any attempt to control Weird groups. Immune to attacks from Government or Straight groups.|8|8|4|8||[{"scope":"any","type":"control","bonus":"4","selector":"align","value":"weird"}]',
+				'root|ds|Discordian Society|+4 on any attempt to control Weird groups. Immune to attacks from Government or Straight groups.|8|8|4|8||[{"scope":"any","type":"control","bonus":"4","selector":"align","value":"Weird"}]',
 				'root|gz|Gnomes of Zurich|May move money freely at end of turn|7|7|4|12||',
 				'root|ne|Network|Turns over two cards at beginning of turn|7|7|4|9||',
 				'root|sc|Servants of Cthulhu|+2 on any attempt to destroy any group.|9|9|4|7||[{"scope":"any","type":"destroy","bonus":"2","selector":"group","value":"any"}]',
@@ -299,6 +316,13 @@ namespace Model {
 			let cards: Card[] = card.children;
 			if (card.parent) { cards.push(card.parent); }
 			return cards;
+		}
+
+		static getFactionCards (faction: Faction) {
+			return Deck.cards.filter((card) => {
+				return card.cardLocation === CardLocation.structure
+					&& card.faction === faction;
+			});
 		}
 
 		static get attackTargets () {

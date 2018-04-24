@@ -1034,7 +1034,7 @@ namespace View {
 			for (let card of open) {
 				CardView.orient(card, cursor, 1);
 				CardView.draw(ctx, card);
-				cursor.movex(View.cardLength);
+				cursor.movex(View.cardLength * 0.8);
 			}
 
 			// footer: faction selection, hand, buttons

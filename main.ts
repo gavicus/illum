@@ -236,7 +236,8 @@ namespace Control {
 				else { break; }
 			}
 			// then draw a card
-			Model.Deck.drawPlot().cardLocation = Model.CardLocation.open;
+			let card = Model.Deck.drawPlot();
+			if(card) { card.cardLocation = Model.CardLocation.open; }
 		}
 
 		static getHasActed(group: Model.Card): boolean {

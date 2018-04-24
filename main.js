@@ -233,6 +233,43 @@ var Model;
                 this.links[3] = 1;
             }
         }
+        static init(text) {
+            let fields = text.split("|");
+            let [type, name, description, atk, def, links, income, alignments, objective] = text.split("|");
+            let card = new Card(name, parseInt(links));
+            card.description = description;
+            card.cardLocation = CardLocation.deck;
+            if (type !== 'special') {
+                let [attack, aid] = atk.split("/");
+                card.attack = parseInt(attack);
+                card.aid = aid ? parseInt(aid) : 0;
+                card.defense = parseInt(def);
+                if (income[0] === '*') {
+                    card.income = 0;
+                    card.specials.push(income.substr(1, income.length - 1));
+                }
+                else {
+                    card.income = parseInt(income);
+                }
+            }
+            if (type === 'root') {
+                card.objective = objective;
+                card.cardType = CardType.root;
+            }
+            else if (type === 'group') {
+                if (alignments.length > 0) {
+                    card.alignments = alignments.split(',');
+                }
+                else {
+                    card.alignments = [];
+                }
+                card.cardType = CardType.group;
+            }
+            else {
+                card.cardType = CardType.special;
+            }
+            return card;
+        }
         get children() {
             let children = [];
             for (let link of this.links) {
@@ -326,43 +363,6 @@ var Model;
                 targets.push(new LinkTarget(this.shape.links[index], this, index));
             }
             return targets;
-        }
-        static init(text) {
-            let fields = text.split("|");
-            let [type, name, description, atk, def, links, income, alignments, objective] = text.split("|");
-            let card = new Card(name, parseInt(links));
-            card.description = description;
-            card.cardLocation = CardLocation.deck;
-            if (type !== 'special') {
-                let [attack, aid] = atk.split("/");
-                card.attack = parseInt(attack);
-                card.aid = aid ? parseInt(aid) : 0;
-                card.defense = parseInt(def);
-                if (income[0] === '*') {
-                    card.income = 0;
-                    card.specials.push(income.substr(1, income.length - 1));
-                }
-                else {
-                    card.income = parseInt(income);
-                }
-            }
-            if (type === 'root') {
-                card.objective = objective;
-                card.cardType = CardType.root;
-            }
-            else if (type === 'group') {
-                if (alignments.length > 0) {
-                    card.alignments = alignments.split(',');
-                }
-                else {
-                    card.alignments = [];
-                }
-                card.cardType = CardType.group;
-            }
-            else {
-                card.cardType = CardType.special;
-            }
-            return card;
         }
     }
     Model_1.Card = Card;
@@ -1450,8 +1450,16 @@ var View;
             Button.getButton(PageDetail.buttons, 'attack').sety(cursor.y);
             Button.getButton(PageDetail.buttons, 'cashXfer').sety(cursor.y);
             for (let btn of PageDetail.buttons) {
-                if (btn.caption === 'attack' && Control.Turn.actionsTaken >= 2) {
-                    continue;
+                if (btn.caption === 'attack') {
+                    if (Control.Turn.actionsTaken >= 2) {
+                        continue;
+                    }
+                    if (Control.Turn.getHasActed(card)) {
+                        continue;
+                    }
+                    if (card.attack === 0) {
+                        continue;
+                    }
                 }
                 if (btn.caption === 'move' && card.cardType === Model.CardType.root) {
                     continue;
@@ -1519,10 +1527,8 @@ var View;
         }
         static cashXferCallback(dlg) {
             console.log('dialogTest', dlg);
-            if (dlg.ok) {
-                let data = dlg.data;
-                PageTable.callback({ command: 'cashXferFinish', value: data });
-            }
+            let data = dlg.data;
+            PageTable.callback({ command: 'cashXferFinish', value: dlg });
             dlg.visible = false;
             View.drawPage();
         }
@@ -1736,6 +1742,9 @@ var Control;
                 last: null,
             };
         }
+        get commandString() {
+            return Command[Control.command];
+        }
         static viewCallback(command) {
             switch (command) {
                 case 'btnMoveGroup': return Control.btnMoveGroup;
@@ -1789,16 +1798,17 @@ var Control;
             }
         }
         static beginCashXfer() {
-            console.log('beginCashXfer');
             Attack.setDefender(View.View.hoveredCard);
             View.PageTable.openCashXferDialog();
             View.View.canvas.style.cursor = '';
             View.View.drawPage();
         }
-        static cashXferFinish(values) {
-            console.log('cashXferFinish', values);
-            Attack.attacker.cash = values.cashXfer.leftValue;
-            Attack.defender.cash = values.cashXfer.rightValue;
+        static cashXferFinish(dialog) {
+            if (dialog.ok) {
+                let values = dialog.data;
+                Attack.attacker.cash = values.cashXfer.leftValue;
+                Attack.defender.cash = values.cashXfer.rightValue;
+            }
             Control.command = Command.none;
             View.View.drawPage();
         }

@@ -62,7 +62,6 @@ namespace Model {
 	}
 
 	export class Card {
-		// TODO: alignments
 		name: string;
 		faction: Faction;
 		linkCount: number;
@@ -101,6 +100,40 @@ namespace Model {
 			if(links !== 2 && links !== 0){ this.links[2] = 1; }
 			if(links > 1){ this.links[3] = 1; }
 		}
+		static init(text: string): Card {
+			let fields = text.split("|");
+			let [type,name,description,atk,def,links,income,alignments,objective] = text.split("|");
+			let card = new Card(name, parseInt(links));
+			card.description = description;
+			card.cardLocation = CardLocation.deck;
+			if (type !== 'special') {
+				let [attack,aid] = atk.split("/");
+				card.attack = parseInt(attack);
+				card.aid = aid ? parseInt(aid) : 0;
+				card.defense = parseInt(def);
+				if(income[0] === '*'){
+					card.income = 0;
+					card.specials.push(income.substr(1,income.length-1));
+				}
+				else {
+					card.income = parseInt(income);
+				}
+			}
+			if (type === 'root'){
+				card.objective = objective;
+				card.cardType = CardType.root;
+			}
+			else if (type === 'group'){
+				if (alignments.length > 0) { card.alignments = alignments.split(','); }
+				else { card.alignments = []; }
+				card.cardType = CardType.group;
+			}
+			else {
+				card.cardType = CardType.special;
+			}
+			return card;
+		}
+		
 		get children(): Card[] {
 			let children = [];
 			for (let link of this.links) {
@@ -176,40 +209,6 @@ namespace Model {
 				targets.push(new LinkTarget(this.shape.links[index], this, index));
 			}
 			return targets;
-		}
-		
-		static init(text: string): Card {
-			let fields = text.split("|");
-			let [type,name,description,atk,def,links,income,alignments,objective] = text.split("|");
-			let card = new Card(name, parseInt(links));
-			card.description = description;
-			card.cardLocation = CardLocation.deck;
-			if (type !== 'special') {
-				let [attack,aid] = atk.split("/");
-				card.attack = parseInt(attack);
-				card.aid = aid ? parseInt(aid) : 0;
-				card.defense = parseInt(def);
-				if(income[0] === '*'){
-					card.income = 0;
-					card.specials.push(income.substr(1,income.length-1));
-				}
-				else {
-					card.income = parseInt(income);
-				}
-			}
-			if (type === 'root'){
-				card.objective = objective;
-				card.cardType = CardType.root;
-			}
-			else if (type === 'group'){
-				if (alignments.length > 0) { card.alignments = alignments.split(','); }
-				else { card.alignments = []; }
-				card.cardType = CardType.group;
-			}
-			else {
-				card.cardType = CardType.special;
-			}
-			return card;
 		}
 		
 	}

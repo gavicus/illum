@@ -924,7 +924,11 @@ namespace View {
 			Button.getButton(PageDetail.buttons, 'attack').sety(cursor.y);
 			Button.getButton(PageDetail.buttons, 'cashXfer').sety(cursor.y);
 			for (let btn of PageDetail.buttons) {
-				if(btn.caption === 'attack' && Control.Turn.actionsTaken >= 2){ continue; }
+				if(btn.caption === 'attack') {
+					if (Control.Turn.actionsTaken >= 2) { continue; }
+					if (Control.Turn.getHasActed(card)) { continue; }
+					if (card.attack === 0) { continue; }
+				}
 				if(btn.caption === 'move' && card.cardType === Model.CardType.root) { continue; }
 				if (btn.caption === 'cash xfer') {
 					let adjacent = Model.Deck.getAdjacentCards(card);
@@ -1007,10 +1011,8 @@ namespace View {
 
 		public static cashXferCallback(dlg: Dialog){
 			console.log('dialogTest',dlg);
-			if (dlg.ok) {
-				let data = dlg.data;
-				PageTable.callback({command:'cashXferFinish', value:data});
-			}
+			let data = dlg.data;
+			PageTable.callback({command:'cashXferFinish', value:dlg});
 			dlg.visible = false;
 			View.drawPage();
 		}

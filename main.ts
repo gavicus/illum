@@ -37,6 +37,9 @@ namespace Control {
 			};
 		}
 
+		public get commandString(): string {
+			return Command[Control.command];
+		}
 		public static viewCallback(command): any {
 			switch (command) {
 				case 'btnMoveGroup': return Control.btnMoveGroup;
@@ -77,18 +80,17 @@ namespace Control {
 		}
 
 		public static beginCashXfer(): void {
-
-			console.log('beginCashXfer');
-
 			Attack.setDefender(View.View.hoveredCard);
 			View.PageTable.openCashXferDialog();
 			View.View.canvas.style.cursor = '';
 			View.View.drawPage();
 		}
-		public static cashXferFinish(values): void {
-			console.log('cashXferFinish',values);
-			Attack.attacker.cash = values.cashXfer.leftValue;
-			Attack.defender.cash = values.cashXfer.rightValue;
+		public static cashXferFinish(dialog): void {
+			if (dialog.ok) {
+				let values = dialog.data;
+				Attack.attacker.cash = values.cashXfer.leftValue;
+				Attack.defender.cash = values.cashXfer.rightValue;
+			}
 			Control.command = Command.none;
 			View.View.drawPage();
 		}

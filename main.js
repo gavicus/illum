@@ -1319,7 +1319,11 @@ var View;
         }
         static get attackTotal() {
             let attacker = PageAttack.callback({ command: 'getAttacker' });
-            return attacker.attack + PageAttack.alignmentBonus + PageAttack.attackerCash + PageAttack.rootCash + PageAttack.specialBonus;
+            return attacker.attack
+                + PageAttack.alignmentBonus
+                + PageAttack.attackerCash
+                + PageAttack.rootCash
+                + PageAttack.specialBonus;
         }
         static get defenseAttribute() {
             let defender = PageAttack.callback({ command: 'getDefender' });
@@ -1576,7 +1580,7 @@ var View;
             cursor.set(10, View.canvas.height - 15);
             for (let i = Model.Model.factions.length - 1; i >= 0; --i) {
                 let faction = Model.Model.factions[i];
-                let btn = new Button(faction.root.name, PageTable.callback('btnShowFaction'), cursor.clone());
+                let btn = new Button(faction.root.name, PageTable.callback({ command: 'btnShowFaction' }), cursor.clone());
                 btn.data = faction;
                 btn.outline = false;
                 btn.textAlign = 'left';
@@ -1631,6 +1635,7 @@ var View;
             ctx.font = View.font;
             ctx.textAlign = 'left';
             let message = 'table state: ' + TableState[PageTable.state];
+            message += '   command: ' + Control.Command[Control.Control.command];
             ctx.fillText(message, cursor.x, cursor.y);
             // hovered
             if (PageTable.state === TableState.chooseLink) {
@@ -1745,6 +1750,7 @@ var View;
                 }
             }
             else if (View.hoveredButton) {
+                console.log('View.hoveredButton', View.hoveredButton);
                 View.hoveredButton.callback(View.hoveredButton);
             }
             else if (View.hoveredCard) {
@@ -1774,6 +1780,8 @@ var View;
 })(View || (View = {}));
 // TODO: show somehow that the "hovered" card is getting moved (gray out or attach to mouse)
 // TODO: if the card is a special, put it in the player's "hand"
+// TODO: disabled buttons should look disabled
+// TODO: on attack page, if no attack type is selected then execute should be disabled
 var Control;
 (function (Control_1) {
     let Command;
@@ -1965,7 +1973,7 @@ var Control;
     }
     Control.hoveredCard = null;
     Control.hoveredLink = null;
-    Control.command = null;
+    Control.command = Command.none;
     Control.attacker = null;
     Control.defender = null;
     Control.movingCard = null;

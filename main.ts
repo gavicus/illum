@@ -11,7 +11,7 @@ namespace Control {
 		public static hoveredCard: Model.Card = null;
 		public static hoveredLink: Model.LinkTarget = null;
 		public static mouse: any;
-		public static command: Command = null;
+		public static command: Command = Command.none;
 		public static attacker: Model.Card = null;
 		public static defender: Model.Card = null;
 		public static movingCard: Model.Card = null;

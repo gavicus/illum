@@ -747,7 +747,11 @@ namespace View {
 		}
 		public static get attackTotal() {
 			let attacker = PageAttack.callback({command:'getAttacker'});
-			return attacker.attack + PageAttack.alignmentBonus + PageAttack.attackerCash + PageAttack.rootCash + PageAttack.specialBonus;
+			return attacker.attack
+				+ PageAttack.alignmentBonus
+				+ PageAttack.attackerCash
+				+ PageAttack.rootCash
+				+ PageAttack.specialBonus;
 		}
 		public static get defenseAttribute() {
 			let defender = PageAttack.callback({command:'getDefender'});
@@ -1017,7 +1021,7 @@ namespace View {
 			cursor.set(10,View.canvas.height-15);
 			for (let i=Model.Model.factions.length-1; i>=0; --i) {
 				let faction = Model.Model.factions[i];
-				let btn = new Button(faction.root.name, PageTable.callback('btnShowFaction'), cursor.clone());
+				let btn = new Button(faction.root.name, PageTable.callback({command:'btnShowFaction'}), cursor.clone());
 				btn.data = faction;
 				btn.outline = false;
 				btn.textAlign = 'left';
@@ -1077,6 +1081,7 @@ namespace View {
 			ctx.font = View.font;
 			ctx.textAlign = 'left';
 			let message = 'table state: '+TableState[PageTable.state];
+			message += '   command: ' + Control.Command[Control.Control.command];
 			ctx.fillText(message,cursor.x,cursor.y);
 
 			// hovered
@@ -1196,6 +1201,9 @@ namespace View {
 				}
 			}
 			else if (View.hoveredButton) {
+
+				console.log('View.hoveredButton',View.hoveredButton);
+
 				View.hoveredButton.callback(View.hoveredButton);
 			}
 			else if (View.hoveredCard){

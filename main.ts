@@ -108,7 +108,6 @@ namespace Control {
 			View.View.drawPage();
 		}
 		public static cancelAttack() {
-			// Attack.clear();
 			this.command = Command.none;
 		}
 		public static restoreTableState() {

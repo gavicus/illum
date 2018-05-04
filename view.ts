@@ -1201,9 +1201,6 @@ namespace View {
 				}
 			}
 			else if (View.hoveredButton) {
-
-				console.log('View.hoveredButton',View.hoveredButton);
-
 				View.hoveredButton.callback(View.hoveredButton);
 			}
 			else if (View.hoveredCard){
@@ -1217,6 +1214,13 @@ namespace View {
 				else {
 					View.screenState = State.detail;
 					PageDetail.card = View.hoveredCard;
+					View.drawPage();
+				}
+			}
+			else {
+				if (PageTable.callback({command:'commandIsAttack'})) {
+					PageTable.callback({command:'clearCommand'});
+					View.canvas.style.cursor = '';
 					View.drawPage();
 				}
 			}

@@ -204,6 +204,7 @@ var Model;
     Model_1.Faction = Faction;
     class Card {
         constructor(name, links = 4) {
+            this.faction = null;
             this.cash = 0;
             this.specials = [];
             this.name = name;
@@ -1914,13 +1915,26 @@ var Control;
             Control.restoreTableState();
             Attack.defender.faction = Attack.attacker.faction;
             Attack.defender.cardLocation = Model.CardLocation.structure;
+            Attack.defender.decouple();
             Control.beginChooseLink(Attack.defender, [Attack.attacker]);
         }
         static neutralizeSuccess() {
+            Control.command = Command.none;
             Control.restoreTableState();
+            Attack.defender.faction = null;
+            Attack.defender.cardLocation = Model.CardLocation.open;
+            Attack.defender.decouple();
+            Attack.defender.cash = 0;
+            View.View.drawPage();
         }
         static destroySuccess() {
+            Control.command = Command.none;
             Control.restoreTableState();
+            Attack.defender.faction = null;
+            Attack.defender.cardLocation = Model.CardLocation.discard;
+            Attack.defender.decouple();
+            Attack.defender.cash = 0;
+            View.View.drawPage();
         }
         static onMouseDown(event) {
             this.mouse.down = true;

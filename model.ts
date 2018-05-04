@@ -64,7 +64,7 @@ namespace Model {
 	export class Card {
 		name: string;
 		id: string;
-		faction: Faction;
+		faction: Faction = null;
 		linkCount: number;
 		parent: Card;
 		links: any[];

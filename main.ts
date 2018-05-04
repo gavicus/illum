@@ -2,6 +2,8 @@
 // TODO: if the card is a special, put it in the player's "hand"
 // TODO: disabled buttons should look disabled
 // TODO: on attack page, if no attack type is selected then execute should be disabled
+// TODO: bug. command = cashxfer, click no card, freeze error
+
 
 namespace Control {
 	export enum Command {attack, cashXfer, none, placeCard};
@@ -120,13 +122,26 @@ namespace Control {
 			Control.restoreTableState();
 			Attack.defender.faction = Attack.attacker.faction;
 			Attack.defender.cardLocation = Model.CardLocation.structure;
+			Attack.defender.decouple();
 			Control.beginChooseLink(Attack.defender, [Attack.attacker]);
 		}
 		public static neutralizeSuccess() {
+			Control.command = Command.none;
 			Control.restoreTableState();
+			Attack.defender.faction = null;
+			Attack.defender.cardLocation = Model.CardLocation.open;
+			Attack.defender.decouple();
+			Attack.defender.cash = 0;
+			View.View.drawPage();
 		}
 		public static destroySuccess() {
+			Control.command = Command.none;
 			Control.restoreTableState();
+			Attack.defender.faction = null;
+			Attack.defender.cardLocation = Model.CardLocation.discard;
+			Attack.defender.decouple();
+			Attack.defender.cash = 0;
+			View.View.drawPage();
 		}
 
 		public static onMouseDown(event: MouseEvent){
